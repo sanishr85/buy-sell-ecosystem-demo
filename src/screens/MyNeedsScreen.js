@@ -1,46 +1,88 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
-
-const mockNeeds = [
-  {
-    id: '1',
-    title: 'Need a plumber for kitchen sink',
-    category: 'Home Services',
-    budget: '100-200',
-    location: 'Brooklyn, NY',
-    status: 'active',
-    offersCount: 5,
-    postedAt: '2 hours ago',
-  },
-  {
-    id: '2',
-    title: 'Logo design for startup',
-    category: 'Design & Creative',
-    budget: '300-500',
-    location: 'Manhattan, NY',
-    status: 'active',
-    offersCount: 12,
-    postedAt: '1 day ago',
-  },
-  {
-    id: '3',
-    title: 'Dog walking service',
-    category: 'Other',
-    budget: '20-40',
-    location: 'Queens, NY',
-    status: 'completed',
-    offersCount: 8,
-    postedAt: '1 week ago',
-  },
-];
+import { needsAPI } from '../api/needs';
 
 export default function MyNeedsScreen({ navigation }) {
   const [selectedFilter, setSelectedFilter] = useState('all');
+  const [needs, setNeeds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredNeeds = mockNeeds.filter(need => 
-    selectedFilter === 'all' || need.status === selectedFilter
-  );
+  // Load needs when screen mounts
+  useEffect(() => {
+    loadMyNeeds();
+  }, []);
+
+  // Reload when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadMyNeeds();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadMyNeeds = async () => {
+    try {
+      console.log('📋 Loading my needs...');
+      
+      // Get auth token
+      const token = await AsyncStorage.getItem('userToken');
+      
+      if (!token) {
+        Alert.alert('Error', 'Please login to view your needs');
+        navigation.navigate('Login');
+        return;
+      }
+
+      // Call backend API
+      const response = await needsAPI.getMyNeeds(token);
+      
+      console.log('✅ My needs response:', response);
+
+      if (response.success) {
+        setNeeds(response.needs || []);
+      } else {
+        Alert.alert('Error', response.message || 'Failed to load needs');
+      }
+    } catch (error) {
+      console.error('❌ Load my needs error:', error);
+      Alert.alert('Error', 'Unable to load your needs. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadMyNeeds();
+  };
+
+  // Filter needs by status
+  const filteredNeeds = needs.filter(need => {
+    if (selectedFilter === 'all') return true;
+    return need.status === selectedFilter;
+  });
+
+  // Calculate counts for each filter
+  const allCount = needs.length;
+  const activeCount = needs.filter(n => n.status === 'active').length;
+  const closedCount = needs.filter(n => n.status === 'closed').length;
+
+  // Format time ago
+  const getTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return `${Math.floor(seconds / 604800)}w ago`;
+  };
 
   return (
     <View style={styles.container}>
@@ -55,7 +97,13 @@ export default function MyNeedsScreen({ navigation }) {
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
           <TouchableOpacity
@@ -63,7 +111,7 @@ export default function MyNeedsScreen({ navigation }) {
             onPress={() => setSelectedFilter('all')}
           >
             <Text style={[styles.filterTabText, selectedFilter === 'all' && styles.filterTabTextActive]}>
-              All ({mockNeeds.length})
+              All ({allCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -71,65 +119,118 @@ export default function MyNeedsScreen({ navigation }) {
             onPress={() => setSelectedFilter('active')}
           >
             <Text style={[styles.filterTabText, selectedFilter === 'active' && styles.filterTabTextActive]}>
-              Active ({mockNeeds.filter(n => n.status === 'active').length})
+              Active ({activeCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filterTab, selectedFilter === 'completed' && styles.filterTabActive]}
-            onPress={() => setSelectedFilter('completed')}
+            style={[styles.filterTab, selectedFilter === 'closed' && styles.filterTabActive]}
+            onPress={() => setSelectedFilter('closed')}
           >
-            <Text style={[styles.filterTabText, selectedFilter === 'completed' && styles.filterTabTextActive]}>
-              Completed ({mockNeeds.filter(n => n.status === 'completed').length})
+            <Text style={[styles.filterTabText, selectedFilter === 'closed' && styles.filterTabTextActive]}>
+              Closed ({closedCount})
             </Text>
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Needs List */}
-        <View style={styles.needsContainer}>
-          {filteredNeeds.map(need => (
-            <TouchableOpacity 
-              key={need.id} 
-              style={styles.needCard}
-              onPress={() => navigation.navigate('ViewOffers', { need })}
-            >
-              <View style={styles.needHeader}>
-                <Text style={styles.needTitle}>{need.title}</Text>
-                <View style={[
-                  styles.statusBadge,
-                  need.status === 'active' ? styles.statusActive : styles.statusCompleted
-                ]}>
-                  <Text style={styles.statusText}>
-                    {need.status === 'active' ? '🟢 Active' : '✓ Completed'}
-                  </Text>
+        {/* Loading State */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading your needs...</Text>
+          </View>
+        ) : filteredNeeds.length === 0 ? (
+          /* Empty State */
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>📭</Text>
+            <Text style={styles.emptyTitle}>
+              {selectedFilter === 'all' 
+                ? "No needs posted yet" 
+                : `No ${selectedFilter} needs`}
+            </Text>
+            <Text style={styles.emptyText}>
+              {selectedFilter === 'all'
+                ? "Post your first need and start receiving offers from sellers"
+                : `You don't have any ${selectedFilter} needs at the moment`}
+            </Text>
+            {selectedFilter === 'all' && (
+              <TouchableOpacity 
+                style={styles.emptyButton}
+                onPress={() => navigation.navigate('PostNeed')}
+              >
+                <Text style={styles.emptyButtonText}>Post Your First Need</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          /* Needs List */
+          <View style={styles.needsContainer}>
+            {filteredNeeds.map(need => (
+              <TouchableOpacity 
+                key={need.id} 
+                style={styles.needCard}
+                onPress={() => navigation.navigate('ViewOffers', { needId: need.id, need })}
+              >
+                <View style={styles.needHeader}>
+                  <Text style={styles.needTitle}>{need.title}</Text>
+                  <View style={[
+                    styles.statusBadge,
+                    need.status === 'active' ? styles.statusActive : styles.statusClosed
+                  ]}>
+                    <Text style={styles.statusText}>
+                      {need.status === 'active' ? '🟢 Active' : '🔒 Closed'}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-              
-              <Text style={styles.needCategory}>📁 {need.category}</Text>
-              <Text style={styles.needBudget}>💰 ${need.budget}</Text>
-              <Text style={styles.needLocation}>📍 {need.location}</Text>
-              
-              <View style={styles.needFooter}>
-                <Text style={styles.needTime}>🕐 {need.postedAt}</Text>
-                <TouchableOpacity 
-                  style={styles.offersButton}
-                  onPress={() => navigation.navigate('ViewOffers', { need })}
-                >
-                  <Text style={styles.offersButtonText}>
-                    {need.offersCount} Offers →
+                
+                <Text style={styles.needDescription} numberOfLines={2}>
+                  {need.description}
+                </Text>
+                
+                <Text style={styles.needCategory}>📁 {need.category}</Text>
+                {need.budgetMin && need.budgetMax && (
+                  <Text style={styles.needBudget}>
+                    💰 ${need.budgetMin} - ${need.budgetMax}
                   </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+                )}
+                {need.location?.address && (
+                  <Text style={styles.needLocation}>
+                    📍 {need.location.address}
+                  </Text>
+                )}
+                
+                <View style={styles.needFooter}>
+                  <Text style={styles.needTime}>
+                    🕐 {getTimeAgo(need.createdAt)}
+                  </Text>
+                  <TouchableOpacity 
+                    style={[
+                      styles.offersButton,
+                      need.offersCount === 0 && styles.offersButtonEmpty
+                    ]}
+                    onPress={() => navigation.navigate('ViewOffers', { needId: need.id, need })}
+                  >
+                    <Text style={[
+                      styles.offersButtonText,
+                      need.offersCount === 0 && styles.offersButtonTextEmpty
+                    ]}>
+                      {need.offersCount} {need.offersCount === 1 ? 'Offer' : 'Offers'} →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Post New Need Button */}
-        <TouchableOpacity 
-          style={styles.postNewButton}
-          onPress={() => navigation.navigate('PostNeed')}
-        >
-          <Text style={styles.postNewButtonText}>+ Post New Need</Text>
-        </TouchableOpacity>
+        {!loading && (
+          <TouchableOpacity 
+            style={styles.postNewButton}
+            onPress={() => navigation.navigate('PostNeed')}
+          >
+            <Text style={styles.postNewButtonText}>+ Post New Need</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -151,13 +252,22 @@ const styles = StyleSheet.create({
   filterTabActive: { backgroundColor: colors.primary },
   filterTabText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
   filterTabTextActive: { color: colors.white },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIcon: { fontSize: 64, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8, textAlign: 'center' },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  emptyButton: { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20 },
+  emptyButtonText: { color: colors.white, fontSize: 14, fontWeight: '600' },
   needsContainer: { paddingHorizontal: 20 },
   needCard: { backgroundColor: colors.white, borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
-  needHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  needHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   needTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.text, marginRight: 12 },
+  needDescription: { fontSize: 14, color: colors.textSecondary, marginBottom: 12, lineHeight: 20 },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   statusActive: { backgroundColor: '#d1fae5' },
-  statusCompleted: { backgroundColor: '#ede9fe' },
+  statusClosed: { backgroundColor: '#fee2e2' },
   statusText: { fontSize: 12, fontWeight: '700' },
   needCategory: { fontSize: 14, color: colors.textSecondary, marginBottom: 4 },
   needBudget: { fontSize: 14, color: colors.textSecondary, marginBottom: 4 },
@@ -165,7 +275,9 @@ const styles = StyleSheet.create({
   needFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   needTime: { fontSize: 13, color: colors.textSecondary },
   offersButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  offersButtonEmpty: { backgroundColor: colors.backgroundSecondary },
   offersButtonText: { fontSize: 13, fontWeight: '700', color: colors.white },
+  offersButtonTextEmpty: { color: colors.textSecondary },
   postNewButton: { backgroundColor: colors.primary, marginHorizontal: 20, marginTop: 16, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   postNewButtonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
 });

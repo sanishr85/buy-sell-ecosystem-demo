@@ -1,0 +1,299 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { authAPI } from '../api/auth';
+import { needsAPI } from '../api/needs';
+import { offersAPI } from '../api/offers';
+
+export default function APITestScreen() {
+  const [email, setEmail] = useState('sandeep@example.com');
+  const [password, setPassword] = useState('SecurePass123');
+  const [token, setToken] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState('');
+
+  const testLogin = async () => {
+    setLoading(true);
+    setResult('');
+    try {
+      const response = await authAPI.login(email, password);
+      if (response.success) {
+        setToken(response.token);
+        setResult(JSON.stringify(response, null, 2));
+        Alert.alert('Success', 'Login successful!');
+      } else {
+        setResult('Error: ' + response.message);
+        Alert.alert('Error', response.message);
+      }
+    } catch (error) {
+      setResult('Network Error: ' + error.message);
+      Alert.alert('Error', 'Network error. Is backend running?');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testGetNeeds = async () => {
+    setLoading(true);
+    setResult('');
+    try {
+      const response = await needsAPI.getAll();
+      setResult(JSON.stringify(response, null, 2));
+    } catch (error) {
+      setResult('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testGetMyNeeds = async () => {
+    if (!token) {
+      Alert.alert('Error', 'Please login first');
+      return;
+    }
+    setLoading(true);
+    setResult('');
+    try {
+      const response = await needsAPI.getMyNeeds(token);
+      setResult(JSON.stringify(response, null, 2));
+    } catch (error) {
+      setResult('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testCreateNeed = async () => {
+    if (!token) {
+      Alert.alert('Error', 'Please login first');
+      return;
+    }
+    setLoading(true);
+    setResult('');
+    try {
+      const needData = {
+        title: 'Test Need from Mobile App',
+        description: 'This is a test need created from the mobile app',
+        category: 'Home Services',
+        budgetMin: 50,
+        budgetMax: 100,
+        location: {
+          lat: 37.7749,
+          lng: -122.4194,
+          address: '123 Test St, San Francisco, CA',
+          city: 'San Francisco',
+          state: 'CA',
+        },
+      };
+      const response = await needsAPI.create(token, needData);
+      setResult(JSON.stringify(response, null, 2));
+      if (response.success) {
+        Alert.alert('Success', 'Need created!');
+      }
+    } catch (error) {
+      setResult('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>API Test Screen</Text>
+        
+        <Text style={styles.sectionTitle}>Backend: http://localhost:5001</Text>
+        
+        {/* Login Section */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Email:</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+          />
+          
+          <Text style={styles.label}>Password:</Text>
+          <TextInput
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+          
+          <TouchableOpacity
+            style={styles.button}
+            onPress={testLogin}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>Test Login</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Token Display */}
+        {token ? (
+          <View style={styles.tokenBox}>
+            <Text style={styles.tokenLabel}>Token (logged in):</Text>
+            <Text style={styles.tokenText} numberOfLines={2}>
+              {token}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Test Buttons */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={testGetNeeds}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>Get All Needs</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={testGetMyNeeds}
+            disabled={loading || !token}
+          >
+            <Text style={styles.buttonText}>Get My Needs</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={testCreateNeed}
+            disabled={loading || !token}
+          >
+            <Text style={styles.buttonText}>Create Test Need</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Loading */}
+        {loading && (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        )}
+
+        {/* Result */}
+        {result ? (
+          <View style={styles.resultBox}>
+            <Text style={styles.resultTitle}>Response:</Text>
+            <ScrollView style={styles.resultScroll}>
+              <Text style={styles.resultText}>{result}</Text>
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  content: {
+    padding: 20,
+    paddingTop: 60,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  section: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 5,
+    color: '#333',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 15,
+    fontSize: 14,
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  tokenBox: {
+    backgroundColor: '#e8f5e9',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  tokenLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2e7d32',
+    marginBottom: 5,
+  },
+  tokenText: {
+    fontSize: 10,
+    color: '#1b5e20',
+    fontFamily: 'Courier',
+  },
+  loadingBox: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+  },
+  resultBox: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    maxHeight: 400,
+  },
+  resultTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  resultScroll: {
+    maxHeight: 350,
+  },
+  resultText: {
+    fontSize: 12,
+    fontFamily: 'Courier',
+    color: '#333',
+  },
+});
