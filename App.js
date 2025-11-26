@@ -1,6 +1,6 @@
 import React from 'react';
-import APITestScreen from './src/screens/APITestScreen';
+import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
-  return <APITestScreen />;
+  return <AppNavigator />;
 }

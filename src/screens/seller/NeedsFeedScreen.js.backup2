@@ -11,38 +11,19 @@ export default function NeedsFeedScreen({ navigation }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [needs, setNeeds] = useState([]);
   const [categories, setCategories] = useState(['All']);
-  const [currentUserId, setCurrentUserId] = useState(null);
 
-  // Load current user and needs when screen mounts
+  // Load needs when screen mounts
   useEffect(() => {
-    loadCurrentUser();
+    loadNeeds();
   }, []);
-
-  useEffect(() => {
-    if (currentUserId) {
-      loadNeeds();
-    }
-  }, [currentUserId]);
 
   // Reload when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadCurrentUser();
+      loadNeeds();
     });
     return unsubscribe;
   }, [navigation]);
-
-  const loadCurrentUser = async () => {
-    try {
-      const userDataStr = await AsyncStorage.getItem('userData');
-      if (userDataStr) {
-        const userData = JSON.parse(userDataStr);
-        setCurrentUserId(userData.id);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
 
   const loadNeeds = async () => {
     try {
@@ -54,20 +35,13 @@ export default function NeedsFeedScreen({ navigation }) {
       console.log('✅ Needs loaded:', response);
 
       if (response.success) {
-        // FILTER OUT current user's own needs
-        const filteredNeeds = (response.needs || []).filter(
-          need => need.buyerId !== currentUserId
-        );
+        setNeeds(response.needs || []);
         
-        setNeeds(filteredNeeds);
-        
-        // Extract unique categories from filtered needs
+        // Extract unique categories
         const uniqueCategories = ['All', ...new Set(
-          filteredNeeds.map(need => need.category)
+          (response.needs || []).map(need => need.category)
         )];
         setCategories(uniqueCategories);
-        
-        console.log(`✅ Loaded ${filteredNeeds.length} needs (excluded own needs)`);
       } else {
         Alert.alert('Error', response.message || 'Failed to load needs');
       }
@@ -174,12 +148,12 @@ export default function NeedsFeedScreen({ navigation }) {
           <Text style={styles.emptyIcon}>📭</Text>
           <Text style={styles.emptyTitle}>
             {selectedCategory === 'All' 
-              ? 'No needs available yet' 
+              ? 'No active needs yet' 
               : `No needs in ${selectedCategory}`}
           </Text>
           <Text style={styles.emptyText}>
             {selectedCategory === 'All'
-              ? 'Check back soon for new opportunities from buyers'
+              ? 'Check back soon for new opportunities'
               : 'Try selecting a different category'}
           </Text>
           {selectedCategory !== 'All' && (
@@ -286,7 +260,7 @@ const styles = StyleSheet.create({
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
   emptyIcon: { fontSize: 64, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8, textAlign: 'center' },
-  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
   emptyButton: { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 20 },
   emptyButtonText: { color: colors.white, fontSize: 14, fontWeight: '600' },
   content: { padding: 20, paddingTop: 0 },

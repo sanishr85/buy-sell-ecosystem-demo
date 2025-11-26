@@ -1,7 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
 
 // Buy Tab Screens
@@ -14,9 +16,9 @@ import RateSellerScreen from '../screens/RateSellerScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 // Sell Tab Screens
-import NeedsFeedScreen from '../screens/NeedsFeedScreen';
+import NeedsFeedScreen from '../screens/seller/NeedsFeedScreen';
 import NeedDetailScreen from '../screens/NeedDetailScreen';
-import CreateOfferScreen from '../screens/CreateOfferScreen';
+import CreateOfferScreen from '../screens/seller/CreateOfferScreen';
 import MyOffersScreen from '../screens/MyOffersScreen';
 import DeliveryInitiationScreen from '../screens/DeliveryInitiationScreen';
 import OfferDetailsScreen from '../screens/OfferDetailsScreen';
@@ -79,6 +81,89 @@ const CustomTabButton = ({ focused, icon, label, color }) => (
 );
 
 export default function MainTabNavigator() {
+  const navigation = useNavigation();
+  const [userType, setUserType] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadUserType();
+  }, []);
+
+  // Reload user type when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('🔄 MainTabNavigator focused, reloading user type...');
+      loadUserType();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadUserType = async () => {
+    try {
+      const userDataStr = await AsyncStorage.getItem('userData');
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        console.log('👤 User data loaded in MainTabNavigator:', {
+          email: userData.email,
+          name: userData.name,
+          isBuyer: userData.isBuyer,
+          isSeller: userData.isSeller
+        });
+        setUserType({
+          isBuyer: userData.isBuyer || false,
+          isSeller: userData.isSeller || false,
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error loading user type:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Determine which tabs to show
+  const showBuyTab = userType?.isBuyer === true;
+  const showSellTab = userType?.isSeller === true;
+
+  console.log('🔍 Tab visibility check:', { 
+    showBuyTab, 
+    showSellTab,
+    userType 
+  });
+
+  // If neither flag is set, default to buyer for now
+  if (!showBuyTab && !showSellTab) {
+    console.warn('⚠️ User has no buyer or seller flag set, defaulting to buyer');
+    return (
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: styles.tabBar,
+          tabBarShowLabel: false,
+        }}
+      >
+        <Tab.Screen 
+          name="BuyTab" 
+          component={BuyStackNavigator}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <CustomTabButton focused={focused} icon="🛒" label="Buy" color="#6366f1" />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+    );
+  }
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -87,29 +172,38 @@ export default function MainTabNavigator() {
         tabBarShowLabel: false,
       }}
     >
-      <Tab.Screen 
-        name="BuyTab" 
-        component={BuyStackNavigator}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <CustomTabButton focused={focused} icon="🛒" label="Buy" color="#6366f1" />
-          ),
-        }}
-      />
-      <Tab.Screen 
-        name="SellTab" 
-        component={SellStackNavigator}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <CustomTabButton focused={focused} icon="💰" label="Sell" color="#10b981" />
-          ),
-        }}
-      />
+      {/* Only show Buy tab if user is a buyer */}
+      {showBuyTab && (
+        <Tab.Screen 
+          name="BuyTab" 
+          component={BuyStackNavigator}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <CustomTabButton focused={focused} icon="🛒" label="Buy" color="#6366f1" />
+            ),
+          }}
+        />
+      )}
+      
+      {/* Only show Sell tab if user is a seller */}
+      {showSellTab && (
+        <Tab.Screen 
+          name="SellTab" 
+          component={SellStackNavigator}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <CustomTabButton focused={focused} icon="💰" label="Sell" color="#10b981" />
+            ),
+          }}
+        />
+      )}
     </Tab.Navigator>
   );
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
   tabBar: { height: 90, paddingTop: 10, paddingBottom: 20, paddingHorizontal: 20, backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.border, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12 },
   tabButton: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 24, borderRadius: 16, minWidth: 140 },
   iconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 6, borderWidth: 2, borderColor: 'transparent' },

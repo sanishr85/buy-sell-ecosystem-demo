@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { offersAPI } from '../api/offers';
 
 export default function ViewOffersScreen({ route, navigation }) {
-  const { need, needId } = route.params;
+  const { needId, need } = route.params;
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Load offers when screen mounts
   useEffect(() => {
     loadOffers();
   }, []);
 
-  // Reload when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadOffers();
@@ -25,19 +23,9 @@ export default function ViewOffersScreen({ route, navigation }) {
 
   const loadOffers = async () => {
     try {
-      console.log('📋 Loading offers for need:', needId || need?.id);
+      console.log('📥 Loading offers for need:', needId);
       
-      // Get auth token
-      const token = await AsyncStorage.getItem('userToken');
-      
-      if (!token) {
-        Alert.alert('Error', 'Please login to view offers');
-        navigation.navigate('Login');
-        return;
-      }
-
-      // Call backend API
-      const response = await offersAPI.getByNeed(token, needId || need?.id);
+      const response = await offersAPI.getByNeed(needId);
       
       console.log('✅ Offers loaded:', response);
 
@@ -48,7 +36,7 @@ export default function ViewOffersScreen({ route, navigation }) {
       }
     } catch (error) {
       console.error('❌ Load offers error:', error);
-      Alert.alert('Error', 'Unable to load offers. Please try again.');
+      Alert.alert('Error', 'Failed to get offers');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -60,39 +48,36 @@ export default function ViewOffersScreen({ route, navigation }) {
     loadOffers();
   };
 
-  const handleAcceptOffer = (offer) => {
+  const handleAcceptOffer = async (offerId) => {
     Alert.alert(
-      'Accept Offer?',
-      `Accept ${offer.seller.name}'s offer for $${offer.amount}?\n\nPayment will be held in escrow until service completion.`,
+      'Accept Offer',
+      'Are you sure you want to accept this offer? This will decline all other offers.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Accept & Pay',
+          text: 'Accept',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('userToken');
+              console.log('✅ Accepting offer:', offerId);
               
-              // Call accept API
-              const response = await offersAPI.accept(token, offer.id);
+              const response = await offersAPI.accept(offerId);
               
               if (response.success) {
-                Alert.alert(
-                  'Offer Accepted! 🎉',
-                  `${offer.seller.name}'s offer has been accepted. The need is now closed and other offers have been declined.`,
-                  [
-                    {
-                      text: 'Continue to Payment',
-                      onPress: () => navigation.navigate('PaymentMethod', { offer, need })
+                Alert.alert('Success', 'Offer accepted! Proceeding to payment...', [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      loadOffers();
+                      navigation.navigate('PaymentMethod', { offerId });
                     }
-                  ]
-                );
-                // Reload offers to show updated status
-                loadOffers();
+                  }
+                ]);
               } else {
                 Alert.alert('Error', response.message || 'Failed to accept offer');
               }
             } catch (error) {
-              Alert.alert('Error', 'Unable to accept offer. Please try again.');
+              console.error('❌ Accept offer error:', error);
+              Alert.alert('Error', 'Failed to accept offer');
             }
           }
         }
@@ -100,10 +85,10 @@ export default function ViewOffersScreen({ route, navigation }) {
     );
   };
 
-  const handleDeclineOffer = (offer) => {
+  const handleDeclineOffer = async (offerId) => {
     Alert.alert(
-      'Decline Offer?',
-      `Are you sure you want to decline ${offer.seller.name}'s offer for $${offer.amount}? This action cannot be undone.`,
+      'Decline Offer',
+      'Are you sure you want to decline this offer?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -111,20 +96,19 @@ export default function ViewOffersScreen({ route, navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const token = await AsyncStorage.getItem('userToken');
+              console.log('❌ Declining offer:', offerId);
               
-              // Call decline API
-              const response = await offersAPI.decline(token, offer.id);
+              const response = await offersAPI.decline(offerId);
               
               if (response.success) {
-                Alert.alert('Offer Declined', `${offer.seller.name}'s offer has been declined.`);
-                // Reload offers to show updated list
+                Alert.alert('Success', 'Offer declined');
                 loadOffers();
               } else {
                 Alert.alert('Error', response.message || 'Failed to decline offer');
               }
             } catch (error) {
-              Alert.alert('Error', 'Unable to decline offer. Please try again.');
+              console.error('❌ Decline offer error:', error);
+              Alert.alert('Error', 'Failed to decline offer');
             }
           }
         }
@@ -132,33 +116,10 @@ export default function ViewOffersScreen({ route, navigation }) {
     );
   };
 
-  const handleMessageSeller = (offer) => {
-    const chat = {
-      id: offer.id,
-      otherUser: {
-        name: offer.seller.name,
-        avatar: offer.seller.avatar || offer.seller.name.charAt(0),
-        role: 'seller',
-      },
-      lastMessage: {
-        text: offer.description,
-        time: offer.createdAt,
-        unread: false,
-      },
-      orderId: offer.id,
-      orderTitle: need?.title || 'Order',
-    };
-    navigation.navigate('Chat', { chat });
+  const formatCurrency = (amount) => {
+    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
-  const handleViewSellerProfile = (offer) => {
-    Alert.alert(
-      'Seller Profile',
-      `${offer.seller.name}\n\nRating: ${offer.seller.rating.average} ⭐ (${offer.seller.rating.total} reviews)\n\nThis feature will show full seller profile in a future update.`
-    );
-  };
-
-  // Format time ago
   const getTimeAgo = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -171,27 +132,37 @@ export default function ViewOffersScreen({ route, navigation }) {
     return `${Math.floor(seconds / 604800)}w ago`;
   };
 
-  // Filter only pending offers
-  const pendingOffers = offers.filter(o => o.status === 'pending');
+  const statusConfig = {
+    pending: { label: 'Pending', color: '#f59e0b', bgColor: '#fef3c7', emoji: '⏳' },
+    accepted: { label: 'Accepted', color: '#10b981', bgColor: '#d1fae5', emoji: '✅' },
+    declined: { label: 'Declined', color: '#ef4444', bgColor: '#fee2e2', emoji: '❌' },
+  };
+
+  const pendingCount = offers.filter(o => o.status === 'pending').length;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Offers Received</Text>
-          <Text style={styles.headerSubtitle}>
-            {loading ? 'Loading...' : `${pendingOffers.length} pending offers`}
-          </Text>
+          <Text style={styles.title}>Offers Received</Text>
+          <Text style={styles.subtitle}>{pendingCount} pending offers</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.chatListButton}
-          onPress={() => navigation.navigate('ChatList')}
-        >
-          <Text style={styles.chatListIcon}>💬</Text>
+        <TouchableOpacity style={styles.chatButton} onPress={() => Alert.alert('Coming Soon', 'Chat feature coming soon!')}>
+          <Text style={styles.chatIcon}>💬</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.needSummary}>
+        <Text style={styles.needTitle}>{need?.title || 'Your Need'}</Text>
+        {need?.budgetMin && need?.budgetMax && (
+          <Text style={styles.needBudget}>Your Budget: ${need.budgetMin} - ${need.budgetMax}</Text>
+        )}
+        <Text style={styles.needStatus}>
+          Status: <Text style={{ color: colors.success }}>● Active</Text>
+        </Text>
       </View>
 
       {loading ? (
@@ -199,170 +170,136 @@ export default function ViewOffersScreen({ route, navigation }) {
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading offers...</Text>
         </View>
+      ) : offers.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>📭</Text>
+          <Text style={styles.emptyTitle}>No offers yet</Text>
+          <Text style={styles.emptyText}>
+            Sellers will submit offers soon. Check back later!
+          </Text>
+        </View>
       ) : (
         <ScrollView 
-          style={styles.content} 
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          style={styles.offersList}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <View style={styles.needSummary}>
-            <Text style={styles.needTitle}>{need?.title || 'Your Need'}</Text>
-            {need?.budgetMin && need?.budgetMax && (
-              <Text style={styles.needBudget}>
-                Your Budget: ${need.budgetMin} - ${need.budgetMax}
-              </Text>
-            )}
-            {need?.status && (
-              <Text style={styles.needStatus}>
-                Status: {need.status === 'active' ? '🟢 Active' : '🔒 Closed'}
-              </Text>
-            )}
-          </View>
-
-          {pendingOffers.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>📭</Text>
-              <Text style={styles.emptyTitle}>No pending offers</Text>
-              <Text style={styles.emptyText}>
-                {offers.length > 0 
-                  ? 'All offers have been accepted or declined.' 
-                  : 'Sellers will start making offers soon. Check back later!'}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.offersContainer}>
-              {pendingOffers.map((offer) => (
-                <View key={offer.id} style={styles.offerCard}>
-                  <View style={styles.sellerHeader}>
-                    <View style={styles.sellerAvatar}>
-                      <Text style={styles.sellerAvatarText}>
-                        {offer.seller.name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.sellerInfo}>
-                      <Text style={styles.sellerName}>{offer.seller.name}</Text>
-                      <View style={styles.ratingContainer}>
-                        <Text style={styles.ratingText}>
-                          ⭐ {offer.seller.rating.average || 0}
-                        </Text>
-                        <Text style={styles.ratingCount}>
-                          ({offer.seller.rating.total || 0} reviews)
-                        </Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.viewProfileButton}
-                      onPress={() => handleViewSellerProfile(offer)}
-                    >
-                      <Text style={styles.viewProfileText}>View</Text>
-                    </TouchableOpacity>
+          {offers.map((offer) => {
+            const config = statusConfig[offer.status] || statusConfig.pending;
+            const isPending = offer.status === 'pending';
+            
+            return (
+              <View key={offer.id} style={styles.offerCard}>
+                <View style={styles.sellerSection}>
+                  <View style={styles.sellerAvatar}>
+                    <Text style={styles.sellerAvatarText}>
+                      {offer.sellerName?.substring(0, 2).toUpperCase() || 'SE'}
+                    </Text>
                   </View>
-
-                  <View style={styles.offerDetails}>
-                    <View style={styles.offerAmount}>
-                      <Text style={styles.amountLabel}>Offer Amount</Text>
-                      <Text style={styles.amountValue}>${offer.amount}</Text>
-                    </View>
-                    {offer.deliveryTime && (
-                      <View style={styles.deliveryTime}>
-                        <Text style={styles.deliveryLabel}>⏱️ Completion Time</Text>
-                        <Text style={styles.deliveryValue}>{offer.deliveryTime}</Text>
-                      </View>
+                  <View style={styles.sellerInfo}>
+                    <Text style={styles.sellerName}>{offer.sellerName || 'Seller'}</Text>
+                    {offer.sellerRating && (
+                      <Text style={styles.sellerRating}>
+                        ⭐ {offer.sellerRating.average?.toFixed(1) || '0.0'} ({offer.sellerRating.total || 0} reviews)
+                      </Text>
                     )}
                   </View>
-
-                  <Text style={styles.offerDescription}>{offer.description}</Text>
-
-                  <View style={styles.offerFooter}>
-                    <Text style={styles.postedTime}>
-                      Posted {getTimeAgo(offer.createdAt)}
+                  <View style={[styles.statusBadge, { backgroundColor: config.bgColor }]}>
+                    <Text style={[styles.statusText, { color: config.color }]}>
+                      {config.emoji} {config.label}
                     </Text>
+                  </View>
+                </View>
+
+                <View style={styles.offerDetails}>
+                  <View style={styles.offerDetailRow}>
+                    <Text style={styles.offerDetailLabel}>Offer Amount:</Text>
+                    <Text style={styles.offerAmount}>{formatCurrency(offer.amount || offer.price)}</Text>
+                  </View>
+                  <View style={styles.offerDetailRow}>
+                    <Text style={styles.offerDetailLabel}>Delivery Time:</Text>
+                    <Text style={styles.offerDetailValue}>
+                      {offer.deliveryTime || offer.estimatedDeliveryDays || 'Not specified'}
+                    </Text>
+                  </View>
+                </View>
+
+                {offer.description && (
+                  <View style={styles.messageSection}>
+                    <Text style={styles.messageLabel}>Message:</Text>
+                    <Text style={styles.messageText}>{offer.description}</Text>
+                  </View>
+                )}
+
+                <Text style={styles.offerTime}>{getTimeAgo(offer.createdAt)}</Text>
+
+                {isPending && (
+                  <View style={styles.actionButtons}>
                     <TouchableOpacity 
-                      style={styles.messageButton}
-                      onPress={() => handleMessageSeller(offer)}
+                      style={[styles.actionButton, styles.acceptButton]}
+                      onPress={() => handleAcceptOffer(offer.id)}
                     >
-                      <Text style={styles.messageButtonText}>💬 Message</Text>
+                      <Text style={styles.acceptButtonText}>✓ Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.actionButton, styles.declineButton]}
+                      onPress={() => handleDeclineOffer(offer.id)}
+                    >
+                      <Text style={styles.declineButtonText}>✕ Decline</Text>
                     </TouchableOpacity>
                   </View>
-
-                  {offer.canAccept && offer.canDecline && (
-                    <View style={styles.actionButtons}>
-                      <TouchableOpacity 
-                        style={styles.declineButton}
-                        onPress={() => handleDeclineOffer(offer)}
-                      >
-                        <Text style={styles.declineButtonText}>✕ Decline</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.acceptButton}
-                        onPress={() => handleAcceptOffer(offer)}
-                      >
-                        <Text style={styles.acceptButtonText}>✓ Accept Offer</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          <View style={{ height: 40 }} />
+                )}
+              </View>
+            );
+          })}
         </ScrollView>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.white, paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  backButton: { marginRight: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
+  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
   backButtonText: { fontSize: 24, color: colors.text },
-  headerContent: { flex: 1 },
-  headerTitle: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  headerSubtitle: { fontSize: 14, color: colors.textSecondary },
-  chatListButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
-  chatListIcon: { fontSize: 20 },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+  headerContent: { flex: 1, marginLeft: 16 },
+  title: { fontSize: 20, fontWeight: 'bold', color: colors.text },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
+  chatButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center' },
+  chatIcon: { fontSize: 20 },
+  needSummary: { backgroundColor: colors.white, padding: 16, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  needTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  needBudget: { fontSize: 14, color: colors.success, fontWeight: '600', marginBottom: 4 },
+  needStatus: { fontSize: 14, color: colors.textSecondary },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
-  content: { flex: 1 },
-  needSummary: { backgroundColor: colors.white, padding: 20, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  needTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  needBudget: { fontSize: 14, color: colors.textSecondary, marginBottom: 4 },
-  needStatus: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
-  offersContainer: { paddingHorizontal: 20 },
-  offerCard: { backgroundColor: colors.white, borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
-  sellerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  sellerAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  sellerAvatarText: { fontSize: 20, fontWeight: '700', color: colors.white },
-  sellerInfo: { flex: 1 },
-  sellerName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  ratingContainer: { flexDirection: 'row', alignItems: 'center' },
-  ratingText: { fontSize: 14, fontWeight: '600', color: colors.text, marginRight: 6 },
-  ratingCount: { fontSize: 13, color: colors.textSecondary },
-  viewProfileButton: { backgroundColor: colors.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  viewProfileText: { fontSize: 13, fontWeight: '600', color: colors.primary },
-  offerDetails: { flexDirection: 'row', backgroundColor: colors.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 16 },
-  offerAmount: { flex: 1, paddingRight: 12, borderRightWidth: 1, borderRightColor: colors.border },
-  amountLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
-  amountValue: { fontSize: 22, fontWeight: '700', color: colors.success },
-  deliveryTime: { flex: 1, paddingLeft: 12 },
-  deliveryLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
-  deliveryValue: { fontSize: 15, fontWeight: '600', color: colors.text },
-  offerDescription: { fontSize: 15, color: colors.text, lineHeight: 22, marginBottom: 16 },
-  offerFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border, marginBottom: 16 },
-  postedTime: { fontSize: 13, color: colors.textSecondary },
-  messageButton: { backgroundColor: colors.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  messageButtonText: { fontSize: 13, fontWeight: '600', color: colors.primary },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  emptyIcon: { fontSize: 64, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
+  offersList: { flex: 1 },
+  offerCard: { backgroundColor: colors.white, margin: 16, marginBottom: 8, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  sellerSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  sellerAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  sellerAvatarText: { fontSize: 16, fontWeight: 'bold', color: colors.white },
+  sellerInfo: { flex: 1, marginLeft: 12 },
+  sellerName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 2 },
+  sellerRating: { fontSize: 13, color: colors.textSecondary },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  statusText: { fontSize: 12, fontWeight: '700' },
+  offerDetails: { marginBottom: 16 },
+  offerDetailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  offerDetailLabel: { fontSize: 14, color: colors.textSecondary },
+  offerAmount: { fontSize: 18, fontWeight: '700', color: colors.success },
+  offerDetailValue: { fontSize: 14, fontWeight: '600', color: colors.text },
+  messageSection: { marginBottom: 16 },
+  messageLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  messageText: { fontSize: 14, color: colors.text, lineHeight: 20 },
+  offerTime: { fontSize: 12, color: colors.textLight, marginBottom: 16 },
   actionButtons: { flexDirection: 'row', gap: 12 },
-  declineButton: { flex: 1, backgroundColor: '#fee2e2', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#fecaca' },
-  declineButtonText: { color: '#ef4444', fontSize: 14, fontWeight: '700' },
-  acceptButton: { flex: 1, backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
-  acceptButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  emptyState: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 },
-  emptyEmoji: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8, textAlign: 'center' },
-  emptyText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  actionButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
+  acceptButton: { backgroundColor: colors.success },
+  acceptButtonText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  declineButton: { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border },
+  declineButtonText: { color: colors.text, fontSize: 15, fontWeight: '600' },
 });
