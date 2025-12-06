@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, A
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../theme/colors';
-import { needsAPI } from '../../api/needs';
+import { needsAPI } from '../../api/needs2';
+import { offersAPI } from '../../api/offers2';
 
 export default function NeedsFeedScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
@@ -54,9 +55,17 @@ export default function NeedsFeedScreen({ navigation }) {
       console.log('✅ Needs loaded:', response);
 
       if (response.success) {
-        // FILTER OUT current user's own needs
+        // ✅ Get seller's offers to filter out already-offered needs
+        const offersResponse = await offersAPI.getMyOffers();
+        const myOfferNeedIds = offersResponse.success 
+          ? offersResponse.offers.map(o => o.needId) 
+          : [];
+
+        console.log('📤 My offered need IDs:', myOfferNeedIds);
+
+        // ✅ FILTER OUT: (1) current user's own needs, (2) already offered needs
         const filteredNeeds = (response.needs || []).filter(
-          need => need.buyerId !== currentUserId
+          need => need.buyerId !== currentUserId && !myOfferNeedIds.includes(need.id)
         );
         
         setNeeds(filteredNeeds);
@@ -67,7 +76,7 @@ export default function NeedsFeedScreen({ navigation }) {
         )];
         setCategories(uniqueCategories);
         
-        console.log(`✅ Loaded ${filteredNeeds.length} needs (excluded own needs)`);
+        console.log(`✅ Loaded ${filteredNeeds.length} needs (excluded own + already offered)`);
       } else {
         Alert.alert('Error', response.message || 'Failed to load needs');
       }

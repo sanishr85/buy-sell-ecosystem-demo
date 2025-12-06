@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
-import { offersAPI } from '../api/offers';
+import { offersAPI } from '../api/offers2';
 
 const statusConfig = {
   pending: { label: 'Pending', color: '#f59e0b', bgColor: '#fef3c7', emoji: '⏳' },
@@ -177,7 +177,14 @@ export default function MyOffersScreen({ navigation }) {
               <TouchableOpacity
                 key={offer.id}
                 style={styles.offerCard}
-                onPress={() => navigation.navigate('OfferDetails', { offerId: offer.id })}
+                onPress={() => {
+                  if (offer.orderId) {
+                    // For accepted offers, navigate to order tracking
+                    navigation.navigate('SellerOrderTracking', { orderId: offer.orderId });
+                  } else {
+                    navigation.navigate('OfferDetails', { offerId: offer.id });
+                  }
+                }}
               >
                 <View style={styles.offerHeader}>
                   <View style={styles.offerHeaderLeft}>
@@ -266,4 +273,6 @@ const styles = StyleSheet.create({
   offerFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   offerBuyer: { fontSize: 13, color: colors.textSecondary },
   offerTime: { fontSize: 12, color: colors.textLight },
+  counteredNote: { fontSize: 12, color: '#9C27B0', fontStyle: 'italic', marginTop: 4 },
+  counteredNote: { fontSize: 12, color: '#9C27B0', fontStyle: 'italic', marginTop: 4 },
 });

@@ -1,0 +1,176 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors } from '../../theme/colors';
+import { ordersAPI } from '../../api/orders';
+
+export default function DeliveryInitiationScreen({ route, navigation }) {
+  const { orderId, order } = route.params;
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleMarkAsDelivered = async () => {
+    if (!deliveryNotes.trim()) {
+      Alert.alert('Required', 'Please provide delivery notes or confirmation details');
+      return;
+    }
+
+    Alert.alert(
+      'Confirm Delivery',
+      'Are you sure the service has been completed and delivered?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              
+              const response = await ordersAPI.markAsDelivered(orderId, deliveryNotes.trim());
+              
+              if (response.success) {
+                Alert.alert(
+                  'Success! ✅',
+                  'Order marked as delivered. The buyer will be notified to confirm and release payment.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => navigation.navigate('SellerOrders')
+                    }
+                  ]
+                );
+              } else {
+                Alert.alert('Error', response.message || 'Failed to mark as delivered');
+              }
+            } catch (error) {
+              console.error('❌ Mark as delivered error:', error);
+              Alert.alert('Error', 'Failed to update delivery status');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoid}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+              <Text style={styles.backButtonText}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.headerContent}>
+              <Text style={styles.title}>Mark as Delivered</Text>
+              <Text style={styles.subtitle}>Order #{orderId.substring(0, 8)}</Text>
+            </View>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* Order Summary */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Order Summary</Text>
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Service:</Text>
+              <Text style={styles.summaryValue}>{order?.needTitle || 'Service'}</Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Amount:</Text>
+              <Text style={styles.summaryValue}>${order?.amount?.toFixed(2) || '0.00'}</Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Buyer:</Text>
+              <Text style={styles.summaryValue}>{order?.buyerName || 'Buyer'}</Text>
+            </View>
+          </View>
+
+          {/* Instructions */}
+          <View style={styles.infoBox}>
+            <Text style={styles.infoIcon}>ℹ️</Text>
+            <Text style={styles.infoText}>
+              Once you mark this order as delivered, the buyer will be notified to confirm. 
+              Payment will be released to you after buyer confirmation.
+            </Text>
+          </View>
+
+          {/* Delivery Notes Form */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Delivery Confirmation</Text>
+            <Text style={styles.fieldLabel}>Delivery Notes *</Text>
+            <Text style={styles.fieldHint}>
+              Provide details about the completed service, delivery location, or any other relevant information
+            </Text>
+            
+            <TextInput
+              style={styles.textArea}
+              value={deliveryNotes}
+              onChangeText={setDeliveryNotes}
+              placeholder="e.g., Service completed successfully. All work has been delivered as requested..."
+              multiline
+              numberOfLines={6}
+              textAlignVertical="top"
+            />
+          </View>
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            onPress={handleMarkAsDelivered}
+            disabled={loading}
+          >
+            <Text style={styles.submitButtonText}>
+              {loading ? 'Submitting...' : '✅ Mark as Delivered'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Warning */}
+          <View style={styles.warningBox}>
+            <Text style={styles.warningIcon}>⚠️</Text>
+            <Text style={styles.warningText}>
+              Only mark as delivered when the service is completely finished. 
+              False delivery reports may affect your seller rating.
+            </Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  keyboardAvoid: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
+  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  backButtonText: { fontSize: 24, color: colors.text },
+  headerContent: { flex: 1, marginLeft: 16 },
+  title: { fontSize: 20, fontWeight: 'bold', color: colors.text },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
+  section: { backgroundColor: colors.white, marginHorizontal: 20, marginTop: 16, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 16 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  summaryLabel: { fontSize: 14, color: colors.textSecondary },
+  summaryValue: { fontSize: 14, fontWeight: '600', color: colors.text, textAlign: 'right', flex: 1, marginLeft: 16 },
+  infoBox: { flexDirection: 'row', backgroundColor: colors.primary + '10', marginHorizontal: 20, marginTop: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.primary },
+  infoIcon: { fontSize: 20, marginRight: 12 },
+  infoText: { flex: 1, fontSize: 13, color: colors.primary, lineHeight: 18 },
+  fieldLabel: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  fieldHint: { fontSize: 13, color: colors.textSecondary, marginBottom: 12, lineHeight: 18 },
+  textArea: { backgroundColor: colors.backgroundSecondary, borderRadius: 12, padding: 16, fontSize: 15, color: colors.text, borderWidth: 1, borderColor: colors.border, minHeight: 140 },
+  submitButton: { backgroundColor: colors.success, marginHorizontal: 20, marginTop: 24, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  submitButtonDisabled: { opacity: 0.5 },
+  submitButtonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
+  warningBox: { flexDirection: 'row', backgroundColor: colors.warning + '10', marginHorizontal: 20, marginTop: 16, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.warning },
+  warningIcon: { fontSize: 20, marginRight: 12 },
+  warningText: { flex: 1, fontSize: 13, color: colors.warning, lineHeight: 18 },
+});

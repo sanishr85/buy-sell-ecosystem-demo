@@ -1,0 +1,195 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Button from '../../components/common/Button';
+import Input from '../../components/common/Input';
+import { colors } from '../../theme/colors';
+import { offersAPI } from '../../api/offers2';
+
+export default function CreateOfferScreen({ route, navigation }) {
+  const { need, needId } = route.params;
+  const [price, setPrice] = useState('');
+  const [message, setMessage] = useState('');
+  const [estimatedDelivery, setEstimatedDelivery] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const validateForm = () => {
+    const newErrors = {};
+    const priceNum = parseFloat(price);
+    
+    // Validate price
+    if (!price || isNaN(priceNum)) {
+      newErrors.price = 'Valid price is required';
+    } else if (priceNum <= 0) {
+      newErrors.price = 'Price must be greater than 0';
+    }
+
+    // Validate message
+    if (!message || message.trim().length < 10) {
+      newErrors.message = 'Message must be at least 10 characters';
+    }
+
+    // Validate delivery time
+    if (!estimatedDelivery || estimatedDelivery.trim().length === 0) {
+      newErrors.estimatedDelivery = 'Estimated delivery time is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const offerData = {
+        needId: needId || need?.id,
+        price: parseFloat(price),
+        amount: parseFloat(price), // Include both for backend compatibility
+        estimatedDeliveryDays: estimatedDelivery,
+        deliveryTime: estimatedDelivery, // Include both for backend compatibility
+        message: message.trim(),
+        description: message.trim() // Include both for backend compatibility
+      };
+
+      console.log('📤 Sending offer data:', offerData);
+
+      // Call backend API (no token parameter needed - it's handled internally)
+      const response = await offersAPI.create(offerData);
+      
+      console.log('✅ Offer created response:', response);
+
+      if (response.success) {
+        Alert.alert(
+          'Success! 🎉',
+          'Your offer has been submitted. The buyer will be notified and can accept or decline your offer.',
+          [
+            {
+              text: 'View My Offers',
+              onPress: () => navigation.navigate('MyOffers')
+            },
+            {
+              text: 'Browse More Needs',
+              onPress: () => navigation.navigate('NeedsFeed'),
+              style: 'cancel'
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', response.message || 'Failed to create offer. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Submit offer error:', error);
+      Alert.alert('Error', 'Something went wrong! Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoid}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Make an Offer</Text>
+            <Text style={styles.subtitle}>For: {need?.title || 'Need'}</Text>
+          </View>
+
+          {/* Need Summary */}
+          {need && (
+            <View style={styles.needSummary}>
+              <Text style={styles.needTitle}>{need.title}</Text>
+              <Text style={styles.needCategory}>{need.category}</Text>
+              {need.budgetMin && need.budgetMax && (
+                <Text style={styles.needBudget}>
+                  Budget: ${need.budgetMin} - ${need.budgetMax}
+                </Text>
+              )}
+            </View>
+          )}
+
+          {/* Form */}
+          <View style={styles.form}>
+            <Input
+              label="Your Price (USD) *"
+              value={price}
+              onChangeText={setPrice}
+              placeholder="Enter your price"
+              keyboardType="decimal-pad"
+              error={errors.price}
+            />
+
+            <Input
+              label="Message to Buyer *"
+              value={message}
+              onChangeText={setMessage}
+              placeholder="Explain why you're the best choice..."
+              multiline
+              numberOfLines={4}
+              error={errors.message}
+              style={styles.textArea}
+            />
+
+            <Input
+              label="Estimated Delivery Time (Optional)"
+              value={estimatedDelivery}
+              onChangeText={setEstimatedDelivery}
+              placeholder="e.g., 3-5 days, 1 week"
+              error={errors.estimatedDelivery}
+            />
+
+            <Button
+              title={loading ? "Submitting..." : "Submit Offer"}
+              onPress={handleSubmit}
+              disabled={loading}
+              style={styles.submitButton}
+            />
+
+            <Text style={styles.disclaimer}>
+              The buyer will review your offer and either accept or decline it. You'll be notified of their decision.
+            </Text>
+          </View>
+
+          {/* Tips */}
+          <View style={styles.tipsCard}>
+            <Text style={styles.tipsTitle}>💡 Tips for a Great Offer</Text>
+            <Text style={styles.tipText}>✓ Be competitive with your pricing</Text>
+            <Text style={styles.tipText}>✓ Highlight your relevant experience</Text>
+            <Text style={styles.tipText}>✓ Be clear about what you'll deliver</Text>
+            <Text style={styles.tipText}>✓ Provide a realistic timeline</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  keyboardAvoid: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  header: { marginBottom: 24 },
+  title: { fontSize: 28, fontWeight: 'bold', color: colors.text, marginBottom: 4 },
+  subtitle: { fontSize: 16, color: colors.textSecondary },
+  needSummary: { backgroundColor: colors.white, padding: 16, borderRadius: 12, marginBottom: 24, borderWidth: 1, borderColor: colors.border },
+  needTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  needCategory: { fontSize: 14, color: colors.textSecondary, marginBottom: 8 },
+  needBudget: { fontSize: 14, color: colors.success, fontWeight: '600' },
+  form: { backgroundColor: colors.white, padding: 20, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
+  textArea: { height: 100, textAlignVertical: 'top' },
+  submitButton: { marginTop: 8 },
+  disclaimer: { marginTop: 16, fontSize: 13, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', lineHeight: 18 },
+  tipsCard: { backgroundColor: colors.primary + '10', padding: 20, borderRadius: 12, borderWidth: 1, borderColor: colors.primary + '30' },
+  tipsTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  tipText: { fontSize: 14, color: colors.textSecondary, marginBottom: 6, lineHeight: 20 },
+});

@@ -1,195 +1,179 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
 import { colors } from '../../theme/colors';
-import { offersAPI } from '../../api/offers';
+import { offersAPI } from '../../api/offers2';
 
 export default function CreateOfferScreen({ route, navigation }) {
-  const { need, needId } = route.params;
-  const [price, setPrice] = useState('');
-  const [message, setMessage] = useState('');
-  const [estimatedDelivery, setEstimatedDelivery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
+  const { need, existingOffer } = route.params;
+  
+  const [price, setPrice] = useState(existingOffer?.price?.toString() || '');
+  const [deliveryTime, setDeliveryTime] = useState(existingOffer?.deliveryTime || '');
+  const [message, setMessage] = useState(existingOffer?.message || existingOffer?.description || '');
+  const [submitting, setSubmitting] = useState(false);
 
-  const validateForm = () => {
-    const newErrors = {};
-    const priceNum = parseFloat(price);
-    
-    // Validate price
-    if (!price || isNaN(priceNum)) {
-      newErrors.price = 'Valid price is required';
-    } else if (priceNum <= 0) {
-      newErrors.price = 'Price must be greater than 0';
-    }
-
-    // Validate message
-    if (!message || message.trim().length < 10) {
-      newErrors.message = 'Message must be at least 10 characters';
-    }
-
-    // Validate delivery time
-    if (!estimatedDelivery || estimatedDelivery.trim().length === 0) {
-      newErrors.estimatedDelivery = 'Estimated delivery time is required';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  const isRevising = !!existingOffer;
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
+    const priceNum = parseFloat(price);
+    
+    if (!priceNum || priceNum <= 0) {
+      Alert.alert('Error', 'Please enter a valid price');
       return;
     }
 
-    setLoading(true);
+    if (!deliveryTime.trim()) {
+      Alert.alert('Error', 'Please enter estimated delivery time');
+      return;
+    }
+
+    if (!message.trim()) {
+      Alert.alert('Error', 'Please describe your offer');
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       const offerData = {
-        needId: needId || need?.id,
-        price: parseFloat(price),
-        amount: parseFloat(price), // Include both for backend compatibility
-        estimatedDeliveryDays: estimatedDelivery,
-        deliveryTime: estimatedDelivery, // Include both for backend compatibility
-        message: message.trim(),
-        description: message.trim() // Include both for backend compatibility
+        needId: need.id,
+        price: priceNum,
+        deliveryTime: deliveryTime,
+        message: message,
+        description: message,
       };
 
-      console.log('📤 Sending offer data:', offerData);
-
-      // Call backend API (no token parameter needed - it's handled internally)
       const response = await offersAPI.create(offerData);
-      
-      console.log('✅ Offer created response:', response);
 
       if (response.success) {
         Alert.alert(
-          'Success! 🎉',
-          'Your offer has been submitted. The buyer will be notified and can accept or decline your offer.',
-          [
-            {
-              text: 'View My Offers',
-              onPress: () => navigation.navigate('MyOffers')
-            },
-            {
-              text: 'Browse More Needs',
-              onPress: () => navigation.navigate('NeedsFeed'),
-              style: 'cancel'
-            }
-          ]
+          'Success!',
+          isRevising ? 'Your offer has been revised' : 'Your offer has been submitted',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } else {
-        Alert.alert('Error', response.message || 'Failed to create offer. Please try again.');
+        Alert.alert('Error', response.message || 'Failed to submit offer');
       }
     } catch (error) {
-      console.error('❌ Submit offer error:', error);
-      Alert.alert('Error', 'Something went wrong! Please try again.');
+      console.error('Submit offer error:', error);
+      Alert.alert('Error', 'Failed to submit offer');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoid}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Make an Offer</Text>
-            <Text style={styles.subtitle}>For: {need?.title || 'Need'}</Text>
-          </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {isRevising ? '✏️ Revise Your Offer' : '💼 Make an Offer'}
+          </Text>
+          <Text style={styles.subtitle}>For: {need.title}</Text>
+        </View>
 
-          {/* Need Summary */}
-          {need && (
-            <View style={styles.needSummary}>
-              <Text style={styles.needTitle}>{need.title}</Text>
-              <Text style={styles.needCategory}>{need.category}</Text>
-              {need.budgetMin && need.budgetMax && (
-                <Text style={styles.needBudget}>
-                  Budget: ${need.budgetMin} - ${need.budgetMax}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Form */}
-          <View style={styles.form}>
-            <Input
-              label="Your Price (USD) *"
-              value={price}
-              onChangeText={setPrice}
-              placeholder="Enter your price"
-              keyboardType="decimal-pad"
-              error={errors.price}
-            />
-
-            <Input
-              label="Message to Buyer *"
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Explain why you're the best choice..."
-              multiline
-              numberOfLines={4}
-              error={errors.message}
-              style={styles.textArea}
-            />
-
-            <Input
-              label="Estimated Delivery Time (Optional)"
-              value={estimatedDelivery}
-              onChangeText={setEstimatedDelivery}
-              placeholder="e.g., 3-5 days, 1 week"
-              error={errors.estimatedDelivery}
-            />
-
-            <Button
-              title={loading ? "Submitting..." : "Submit Offer"}
-              onPress={handleSubmit}
-              disabled={loading}
-              style={styles.submitButton}
-            />
-
-            <Text style={styles.disclaimer}>
-              The buyer will review your offer and either accept or decline it. You'll be notified of their decision.
+        {need.budgetMin && need.budgetMax && (
+          <View style={styles.budgetInfo}>
+            <Text style={styles.budgetLabel}>Buyer's Budget</Text>
+            <Text style={styles.budgetText}>
+              ${need.budgetMin} - ${need.budgetMax}
             </Text>
           </View>
+        )}
 
-          {/* Tips */}
-          <View style={styles.tipsCard}>
-            <Text style={styles.tipsTitle}>💡 Tips for a Great Offer</Text>
-            <Text style={styles.tipText}>✓ Be competitive with your pricing</Text>
-            <Text style={styles.tipText}>✓ Highlight your relevant experience</Text>
-            <Text style={styles.tipText}>✓ Be clear about what you'll deliver</Text>
-            <Text style={styles.tipText}>✓ Provide a realistic timeline</Text>
+        <View style={styles.section}>
+          <Text style={styles.label}>Your Price *</Text>
+          <View style={styles.priceInput}>
+            <Text style={styles.dollarSign}>$</Text>
+            <TextInput
+              style={styles.input}
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="numeric"
+              placeholder="0.00"
+              placeholderTextColor={colors.textSecondary}
+            />
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Estimated Delivery Time *</Text>
+          <TextInput
+            style={styles.textInput}
+            value={deliveryTime}
+            onChangeText={setDeliveryTime}
+            placeholder="e.g., 2 days, 1 week, 3 hours"
+            placeholderTextColor={colors.textSecondary}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Your Proposal *</Text>
+          <TextInput
+            style={styles.messageInput}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Describe what you'll do, your experience, and why you're the best choice..."
+            placeholderTextColor={colors.textSecondary}
+            multiline
+            numberOfLines={6}
+          />
+        </View>
+
+        <View style={styles.infoBox}>
+          <Text style={styles.infoIcon}>ℹ️</Text>
+          <Text style={styles.infoText}>
+            {isRevising 
+              ? 'Your previous offer will be replaced with this new one.'
+              : 'Once submitted, you can revise your offer until the buyer accepts it.'}
+          </Text>
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={submitting}
+        >
+          <Text style={styles.submitButtonText}>
+            {submitting ? 'Submitting...' : isRevising ? 'Update Offer' : 'Submit Offer'}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  keyboardAvoid: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
+  content: { padding: 20 },
   header: { marginBottom: 24 },
-  title: { fontSize: 28, fontWeight: 'bold', color: colors.text, marginBottom: 4 },
+  title: { fontSize: 28, fontWeight: '700', color: colors.text, marginBottom: 4 },
   subtitle: { fontSize: 16, color: colors.textSecondary },
-  needSummary: { backgroundColor: colors.white, padding: 16, borderRadius: 12, marginBottom: 24, borderWidth: 1, borderColor: colors.border },
-  needTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  needCategory: { fontSize: 14, color: colors.textSecondary, marginBottom: 8 },
-  needBudget: { fontSize: 14, color: colors.success, fontWeight: '600' },
-  form: { backgroundColor: colors.white, padding: 20, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
-  textArea: { height: 100, textAlignVertical: 'top' },
-  submitButton: { marginTop: 8 },
-  disclaimer: { marginTop: 16, fontSize: 13, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', lineHeight: 18 },
-  tipsCard: { backgroundColor: colors.primary + '10', padding: 20, borderRadius: 12, borderWidth: 1, borderColor: colors.primary + '30' },
-  tipsTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  tipText: { fontSize: 14, color: colors.textSecondary, marginBottom: 6, lineHeight: 20 },
+  budgetInfo: { backgroundColor: colors.success + '20', padding: 16, borderRadius: 12, marginBottom: 24, alignItems: 'center' },
+  budgetLabel: { fontSize: 14, color: colors.textSecondary, marginBottom: 4 },
+  budgetText: { fontSize: 24, fontWeight: '700', color: colors.success },
+  section: { marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  priceInput: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16 },
+  dollarSign: { fontSize: 24, fontWeight: '700', color: colors.text, marginRight: 8 },
+  input: { flex: 1, fontSize: 24, fontWeight: '700', color: colors.text, paddingVertical: 16 },
+  textInput: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 16, fontSize: 16, color: colors.text },
+  messageInput: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 16, fontSize: 16, color: colors.text, minHeight: 120, textAlignVertical: 'top' },
+  infoBox: { flexDirection: 'row', padding: 16, backgroundColor: '#E3F2FD', borderRadius: 12, alignItems: 'center' },
+  infoIcon: { fontSize: 20, marginRight: 12 },
+  infoText: { flex: 1, fontSize: 13, color: '#1976D2', lineHeight: 18 },
+  footer: { flexDirection: 'row', padding: 20, gap: 12, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.white },
+  cancelButton: { flex: 1, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  cancelButtonText: { fontSize: 16, fontWeight: '600', color: colors.text },
+  submitButton: { flex: 2, padding: 16, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' },
+  submitButtonDisabled: { opacity: 0.5 },
+  submitButtonText: { fontSize: 16, fontWeight: '700', color: colors.white },
 });

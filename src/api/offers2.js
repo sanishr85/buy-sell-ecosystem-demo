@@ -1,0 +1,293 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppConfig } from '../config/app';
+import { demoNeeds } from './needs2';
+import { mockOffers } from '../data/mock';
+
+const API_URL = AppConfig.API_URL;
+
+// In-memory storage for demo mode
+export let demoOffers = [...mockOffers];
+
+export const offersAPI = {
+  getAll: async () => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log('🎭 MOCK: Getting all offers');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      return { success: true, offers: demoOffers };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/offers`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Get all offers error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  getByNeedId: async (needId) => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log('🎭 MOCK: Getting offers for need:', needId);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const offers = demoOffers.filter(o => o.needId === needId);
+      console.log(`📊 Found ${offers.length} offers for need ${needId}`);
+      return { success: true, offers: offers };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/offers/need/${needId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Get offers by need error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  getByNeed: async (needId) => {
+    return offersAPI.getByNeedId(needId);
+  },
+
+  getMyOffers: async () => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log('🎭 MOCK: Getting my offers');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const userData = await AsyncStorage.getItem('userData');
+      const user = userData ? JSON.parse(userData) : { id: 'seller-1' };
+      
+      const myOffers = demoOffers.filter(o => o.sellerId === user.id);
+      console.log(`📤 Found ${myOffers.length} offers`);
+      
+      return { success: true, offers: myOffers };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/offers/my/sent`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Get my offers error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  getMySentOffers: async () => {
+    return offersAPI.getMyOffers();
+  },
+
+  create: async (offerData) => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log('🎭 MOCK: Creating offer', offerData);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const userData = await AsyncStorage.getItem('userData');
+      const user = userData ? JSON.parse(userData) : { 
+        id: 'seller-1',
+        name: 'Demo Seller',
+        email: 'demo-seller@example.com'
+      };
+      
+      // ✅ Get need details to store category and title
+      const { needsAPI } = require('./needs2');
+      const needResponse = await needsAPI.getById(offerData.needId);
+      const need = needResponse.need;
+      
+      const newOffer = {
+        id: `offer-${Date.now()}`,
+        ...offerData,
+        sellerId: user.id,
+        sellerName: user.name,
+        sellerEmail: user.email,
+        // ✅ Store need info with offer
+        needTitle: need?.title || 'Unknown',
+        needCategory: need?.category || 'Other',
+        buyerId: need?.buyerId,
+        buyerName: need?.buyerName,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      
+      demoOffers.push(newOffer);
+      console.log('✅ Offer created:', newOffer.id);
+      
+      return { success: true, offer: newOffer, message: 'Offer submitted!' };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/offers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(offerData),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Create offer error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  accept: async (offerId) => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log('🎭 MOCK: Accepting offer', offerId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const offerIndex = demoOffers.findIndex(o => o.id === offerId);
+      if (offerIndex !== -1) {
+        const acceptedOffer = demoOffers[offerIndex];
+        
+        // ✅ Mark this offer as accepted
+        demoOffers[offerIndex].status = 'accepted';
+        
+        // Update the need to show it has an accepted offer
+        const needIndex = demoNeeds.findIndex(n => n.id === acceptedOffer.needId);
+        if (needIndex !== -1) {
+          demoNeeds[needIndex].status = 'accepted';
+          demoNeeds[needIndex].acceptedOfferId = offerId;
+        }
+        
+        // ✅ Auto-decline all other offers for the same need
+        demoOffers.forEach((offer, idx) => {
+          if (offer.needId === acceptedOffer.needId && idx !== offerIndex && offer.status === 'pending') {
+            demoOffers[idx].status = 'declined';
+            console.log(`  ↳ Auto-declined offer ${offer.id}`);
+          }
+        });
+        
+        console.log('✅ Offer accepted, other offers auto-declined');
+        return { success: true, message: 'Offer accepted!' };
+      }
+      
+      return { success: false, message: 'Offer not found' };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/offers/${offerId}/accept`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Accept offer error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  decline: async (offerId) => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log('🎭 MOCK: Declining offer', offerId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const offerIndex = demoOffers.findIndex(o => o.id === offerId);
+      if (offerIndex !== -1) {
+        demoOffers[offerIndex].status = 'declined';
+        console.log('✅ Offer declined');
+        return { success: true, message: 'Offer declined' };
+      }
+      
+      return { success: false, message: 'Offer not found' };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/offers/${offerId}/decline`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Decline offer error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  getById: async (offerId) => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log('🎭 MOCK: Getting offer by ID', offerId);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const offer = demoOffers.find(o => o.id === offerId);
+      return {
+        success: !!offer,
+        offer: offer || null,
+        message: offer ? '' : 'Offer not found'
+      };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const response = await fetch(`${API_URL}/offers/${offerId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Get offer by ID error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  counter: async (offerId, counterAmount, message) => {
+    if (AppConfig.USE_MOCK_DATA) {
+      console.log("🎭 MOCK: Creating counter offer", { offerId, counterAmount, message });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const offerIndex = demoOffers.findIndex(o => o.id === offerId);
+      if (offerIndex !== -1) {
+        const originalOffer = demoOffers[offerIndex];
+        
+        const counterOffer = {
+          ...originalOffer,
+          id: `counter-${Date.now()}`,
+          isCounterOffer: true,
+          originalOfferId: offerId,
+          price: counterAmount,
+          amount: counterAmount,
+          message: message || "Counter offer from buyer",
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        
+        demoOffers[offerIndex].status = "countered";
+        demoOffers[offerIndex].counterOfferId = counterOffer.id;
+        demoOffers.push(counterOffer);
+        
+        console.log("✅ Counter offer created:", counterOffer.id);
+        return { 
+          success: true, 
+          offer: counterOffer,
+          message: "Counter offer sent to seller!" 
+        };
+      }
+      
+      return { success: false, message: "Original offer not found" };
+    }
+    
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      const response = await fetch(`${API_URL}/offers/${offerId}/counter`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount: counterAmount, message }),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Counter offer error:", error);
+      return { success: false, message: error.message };
+    }
+  },
+};

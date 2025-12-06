@@ -17,6 +17,8 @@ import ProfileScreen from '../screens/ProfileScreen';
 
 // Sell Tab Screens
 import NeedsFeedScreen from '../screens/seller/NeedsFeedScreen';
+import SellerOrdersScreen from '../screens/seller/SellerOrdersScreen';
+import SellerOrderTrackingScreen from '../screens/seller/SellerOrderTrackingScreen';
 import NeedDetailScreen from '../screens/NeedDetailScreen';
 import CreateOfferScreen from '../screens/seller/CreateOfferScreen';
 import MyOffersScreen from '../screens/MyOffersScreen';
@@ -56,6 +58,8 @@ function SellStackNavigator() {
   return (
     <SellStack.Navigator screenOptions={{ headerShown: false }}>
       <SellStack.Screen name="NeedsFeed" component={NeedsFeedScreen} />
+      <SellStack.Screen name="SellerOrderTracking" component={SellerOrderTrackingScreen} options={{ title: 'Order Details' }} />
+      <SellStack.Screen name="SellerOrders" component={SellerOrdersScreen} />
       <SellStack.Screen name="NeedDetail" component={NeedDetailScreen} />
       <SellStack.Screen name="CreateOffer" component={CreateOfferScreen} />
       <SellStack.Screen name="MyOffers" component={MyOffersScreen} />
@@ -89,7 +93,6 @@ export default function MainTabNavigator() {
     loadUserType();
   }, []);
 
-  // Reload user type when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       console.log('🔄 MainTabNavigator focused, reloading user type...');
@@ -130,17 +133,11 @@ export default function MainTabNavigator() {
     );
   }
 
-  // Determine which tabs to show
   const showBuyTab = userType?.isBuyer === true;
   const showSellTab = userType?.isSeller === true;
 
-  console.log('🔍 Tab visibility check:', { 
-    showBuyTab, 
-    showSellTab,
-    userType 
-  });
+  console.log('🔍 Tab visibility check:', { showBuyTab, showSellTab, userType });
 
-  // If neither flag is set, default to buyer for now
   if (!showBuyTab && !showSellTab) {
     console.warn('⚠️ User has no buyer or seller flag set, defaulting to buyer');
     return (
@@ -172,7 +169,6 @@ export default function MainTabNavigator() {
         tabBarShowLabel: false,
       }}
     >
-      {/* Only show Buy tab if user is a buyer */}
       {showBuyTab && (
         <Tab.Screen 
           name="BuyTab" 
@@ -185,7 +181,6 @@ export default function MainTabNavigator() {
         />
       )}
       
-      {/* Only show Sell tab if user is a seller */}
       {showSellTab && (
         <Tab.Screen 
           name="SellTab" 

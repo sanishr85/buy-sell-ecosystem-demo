@@ -1,0 +1,18 @@
+      if (!response.success) {
+        if (response.message?.includes('already have an active offer')) {
+          Alert.alert(
+            'Offer Already Submitted',
+            'You have already submitted an offer for this need. You can view or edit it in "My Offers".',
+            [
+              { text: 'OK' },
+              { 
+                text: 'View My Offers', 
+                onPress: () => navigation.navigate('MyOffers')
+              }
+            ]
+          );
+        } else {
+          Alert.alert('Error', response.message || 'Failed to create offer');
+        }
+        return;
+      }

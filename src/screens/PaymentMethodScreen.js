@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
-import { offersAPI } from '../api/offers';
-import { ordersAPI } from '../api/orders';
+import { offersAPI } from '../api/offers2';
+import { ordersAPI } from '../api/orders2';
 
 export default function PaymentMethodScreen({ route, navigation }) {
   const { offerId, offer: offerParam } = route.params || {};
   const [offer, setOffer] = useState(offerParam);
   const [loading, setLoading] = useState(!offerParam);
+  const [processing, setProcessing] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [addingNewCard, setAddingNewCard] = useState(false);
-  const [cvv, setCvv] = useState('');
 
   useEffect(() => {
     if (!offerParam && offerId) {
@@ -50,27 +50,54 @@ export default function PaymentMethodScreen({ route, navigation }) {
 
     Alert.alert(
       'Confirm Payment',
-      `Pay $${offer?.amount || 0} via escrow?\n\nFunds will be held until service is delivered and confirmed.`,
+      `Pay $${(((offer?.price || offer?.amount) || 0) * 1.05).toFixed(2)} (including 5% platform fee)?\n\nFunds will be held in escrow until service is delivered and confirmed.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm Payment',
-          onPress: () => {
-            // TODO: Integrate with Stripe/payment processor
-            Alert.alert(
-              'Payment Successful! 🎉',
-              'Funds are held in escrow. The seller has been notified to begin work.',
-              [
-                {
-                  text: 'View Order',
-                  onPress: () => navigation.navigate('BuyerOrderTracking', { orderId: offerId })
-                }
-              ]
-            );
-          }
+          onPress: processPayment
         }
       ]
     );
+  };
+
+  const processPayment = async () => {
+    setProcessing(true);
+    
+    try {
+      console.log('💳 Processing payment for offer:', offer.id);
+      
+      // Create order (in real app, this would process payment first)
+      const orderResponse = await ordersAPI.create({
+        offerId: offer.id,
+        paymentMethod: selectedMethod || 'new_card'
+      });
+
+      if (orderResponse.success) {
+        Alert.alert(
+          'Payment Successful! 🎉',
+          'Funds are held in escrow. The seller has been notified to begin work.',
+          [
+            {
+              text: 'View Order',
+              onPress: () => {
+                // Navigate to order tracking
+                navigation.navigate('BuyerOrderTracking', { 
+                  orderId: orderResponse.order.id 
+                });
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', orderResponse.message || 'Failed to create order');
+      }
+    } catch (error) {
+      console.error('❌ Payment error:', error);
+      Alert.alert('Error', 'Payment processing failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   if (loading) {
@@ -97,8 +124,8 @@ export default function PaymentMethodScreen({ route, navigation }) {
     );
   }
 
-  const platformFee = (offer.amount || 0) * 0.05;
-  const totalAmount = (offer.amount || 0) + platformFee;
+  const platformFee = ((offer.price || offer.amount) || 0) * 0.05;
+  const totalAmount = ((offer.price || offer.amount) || 0) + platformFee;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -117,7 +144,7 @@ export default function PaymentMethodScreen({ route, navigation }) {
           <Text style={styles.summaryTitle}>Order Summary</Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Service Amount:</Text>
-            <Text style={styles.summaryValue}>${offer.amount?.toFixed(2) || '0.00'}</Text>
+            <Text style={styles.summaryValue}>${(offer.price || offer.amount)?.toFixed(2) || '0.00'}</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Platform Fee (5%):</Text>
@@ -147,6 +174,7 @@ export default function PaymentMethodScreen({ route, navigation }) {
                 selectedMethod === method.id && styles.methodCardSelected
               ]}
               onPress={() => setSelectedMethod(method.id)}
+              disabled={processing}
             >
               <View style={styles.methodLeft}>
                 <View style={styles.methodIcon}>
@@ -168,6 +196,7 @@ export default function PaymentMethodScreen({ route, navigation }) {
           <TouchableOpacity
             style={styles.addCardButton}
             onPress={() => setAddingNewCard(!addingNewCard)}
+            disabled={processing}
           >
             <Text style={styles.addCardIcon}>+ </Text>
             <Text style={styles.addCardText}>Add New Card</Text>
@@ -176,11 +205,12 @@ export default function PaymentMethodScreen({ route, navigation }) {
 
         {/* Payment Button */}
         <TouchableOpacity
-          style={styles.payButton}
+          style={[styles.payButton, processing && styles.payButtonDisabled]}
           onPress={handleProceedToPayment}
+          disabled={processing}
         >
           <Text style={styles.payButtonText}>
-            Pay ${totalAmount.toFixed(2)}
+            {processing ? 'Processing...' : `Pay $${totalAmount.toFixed(2)}`}
           </Text>
         </TouchableOpacity>
 
@@ -234,6 +264,7 @@ const styles = StyleSheet.create({
   addCardIcon: { fontSize: 20, color: colors.primary, fontWeight: 'bold' },
   addCardText: { fontSize: 15, fontWeight: '600', color: colors.primary },
   payButton: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16 },
+  payButtonDisabled: { backgroundColor: colors.textSecondary, opacity: 0.6 },
   payButtonText: { color: colors.white, fontSize: 18, fontWeight: '700' },
   securityNotice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12 },
   securityIcon: { fontSize: 20, marginRight: 8 },

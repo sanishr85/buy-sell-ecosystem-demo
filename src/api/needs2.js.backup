@@ -1,0 +1,31 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_URL = 'http://192.168.1.19:5001/api';
+
+export const needsAPI = {
+  create: async (needData) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      
+      const url = API_URL + '/needs';
+      const options = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+        },
+        body: JSON.stringify(needData),
+      };
+      
+      console.log('🔍 URL:', url);
+      console.log('🔍 Options:', JSON.stringify(options, null, 2));
+      
+      const response = await fetch(url, options);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Create need error:', error);
+      return { success: false, message: error.message };
+    }
+  },
+};
