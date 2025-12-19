@@ -16,7 +16,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.marketplace.demo"
+      "bundleIdentifier": "com.yourcompany.marketplace.demo",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,6 +27,17 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.yourcompany.marketplace.demo"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "296ffa5b-0da0-482f-baa9-a0f5919f4211"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/296ffa5b-0da0-482f-baa9-a0f5919f4211"
     }
   }
 }
