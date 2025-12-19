@@ -11,3 +11,10 @@ npm-debug.*
 web-build/
 .DS_Store
 checkpoints/
+
+# Build outputs
+dist/
+documentation/
+
+# Categories Excel
+*.xlsx
