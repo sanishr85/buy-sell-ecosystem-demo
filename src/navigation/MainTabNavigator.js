@@ -11,6 +11,8 @@ import PostNeedScreen from '../screens/PostNeedScreen';
 import MyNeedsScreen from '../screens/MyNeedsScreen';
 import ViewOffersScreen from '../screens/ViewOffersScreen';
 import PaymentMethodScreen from '../screens/PaymentMethodScreen';
+import PaymentScreen from '../screens/buyer/PaymentScreen';
+import PaymentSuccessScreen from '../screens/buyer/PaymentSuccessScreen';
 import BuyerOrderTrackingScreen from '../screens/BuyerOrderTrackingScreen';
 import RateSellerScreen from '../screens/RateSellerScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -43,6 +45,8 @@ function BuyStackNavigator() {
       <BuyStack.Screen name="MyNeeds" component={MyNeedsScreen} />
       <BuyStack.Screen name="ViewOffers" component={ViewOffersScreen} />
       <BuyStack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
+      <BuyStack.Screen name="Payment" component={PaymentScreen} />
+      <BuyStack.Screen name="PaymentSuccess" component={PaymentSuccessScreen} />
       <BuyStack.Screen name="BuyerOrderTracking" component={BuyerOrderTrackingScreen} />
       <BuyStack.Screen name="RateSeller" component={RateSellerScreen} />
       <BuyStack.Screen name="ChatList" component={ChatListScreen} />

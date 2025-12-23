@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { calculateSellerCommission } from '../utils/fees';
 import { AppConfig } from '../config/app';
 import { getWorkflowForCategory } from '../config/workflows';
 
@@ -41,7 +42,8 @@ export const ordersAPI = {
       
       // ✅ Ensure we have a valid amount
       const orderAmount = offer.price || 0;
-      const platformFeeAmount = orderAmount * 0.05;
+      const feeCalculation = calculateSellerCommission(orderAmount);
+      const platformFeeAmount = feeCalculation.commission;
       
       const newOrder = {
         id: `order-${Date.now()}`,
@@ -61,7 +63,9 @@ export const ordersAPI = {
         status: 'payment_held',
         workflowType: workflowType,
         platformFee: platformFeeAmount,
-        sellerEarnings: orderAmount - platformFeeAmount,
+        sellerEarnings: feeCalculation.sellerEarnings,
+        feeTier: feeCalculation.tier,
+        feePercentage: feeCalculation.percentage,
         createdAt: new Date().toISOString(),
         deliveredAt: null,
         statusHistory: [

@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import LoginScreen from '../screens/auth/LoginScreen';
+import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
 import OnboardingSellerScreen from '../screens/auth/OnboardingSellerScreen';
 import MainTabNavigator from './MainTabNavigator';

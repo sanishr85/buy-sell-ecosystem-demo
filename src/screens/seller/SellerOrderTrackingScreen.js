@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
+import { formatINR } from '../../utils/fees';
 import { ordersAPI } from '../../api/orders2';
 import UpdateOrderStatusModal from '../UpdateOrderStatusModal';
 import { getStatusInfo } from '../../config/workflows';
@@ -118,17 +119,17 @@ export default function SellerOrderTrackingScreen({ route, navigation }) {
           <View style={styles.card}>
             <View style={styles.paymentRow}>
               <Text style={styles.paymentLabel}>Service Amount</Text>
-              <Text style={styles.paymentValue}>${order.amount?.toFixed(2) || '0.00'}</Text>
+              <Text style={styles.paymentValue}>{formatINR(order.amount?.toFixed(2) || '0.00')}</Text>
             </View>
             <View style={styles.paymentRow}>
-              <Text style={styles.paymentLabel}>Platform Fee (5%)</Text>
-              <Text style={styles.paymentValue}>-${order.platformFee?.toFixed(2) || '0.00'}</Text>
+              <Text style={styles.paymentLabel}>No Platform Fee (5%)</Text>
+              <Text style={styles.paymentValue}>-{formatINR(order.platformFee?.toFixed(2) || '0.00')}</Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.paymentRow}>
               <Text style={styles.totalLabel}>Your Earnings</Text>
               <Text style={styles.totalValue}>
-                ${order.sellerEarnings?.toFixed(2) || (order.amount - (order.platformFee || 0)).toFixed(2)}
+                {formatINR(order.sellerEarnings?.toFixed(2) || (order.amount - (order.platformFee || 0)).toFixed(2))}
               </Text>
             </View>
           </View>

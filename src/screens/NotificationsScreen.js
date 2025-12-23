@@ -57,7 +57,7 @@ export default function NotificationsScreen({ navigation }) {
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Notifications</Text>
           <Text style={styles.headerSubtitle}>
-            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+            {unreadCount > 0 ? `₹{unreadCount} unread` : 'All caught up'}
           </Text>
         </View>
         {unreadCount > 0 && (

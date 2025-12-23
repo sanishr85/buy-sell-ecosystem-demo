@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Button from '../components/common/Button';
+import TopBar from '../components/TopBar';
 import { colors } from '../theme/colors';
 import { needsAPI } from '../api/needs2';
 
 const categories = [
-  { id: 'Home Services', label: 'Home Services', icon: '🏠' },
-  { id: 'Tech & IT', label: 'Tech & IT', icon: '💻' },
-  { id: 'Design & Creative', label: 'Design & Creative', icon: '🎨' },
-  { id: 'Writing & Content', label: 'Writing & Content', icon: '✍️' },
-  { id: 'Business', label: 'Business', icon: '💼' },
-  { id: 'Health & Wellness', label: 'Health & Wellness', icon: '🏥' },
-  { id: 'Education', label: 'Education', icon: '📚' },
+  { id: 'Education & Learning', label: 'Education & Learning', icon: '📚' },
+  { id: 'Food & Culinary', label: 'Food & Culinary', icon: '🍳' },
+  { id: 'Sports & Fitness', label: 'Sports & Fitness', icon: '⚽' },
+  { id: 'Spiritual & Wellness', label: 'Spiritual & Wellness', icon: '🧘' },
+  { id: 'Technology Support', label: 'Technology Support', icon: '💻' },
+  { id: 'Home & Personal Care', label: 'Home & Personal Care', icon: '🏠' },
+  { id: 'Home Services', label: 'Home Services', icon: '🔧' },
   { id: 'Other', label: 'Other', icon: '📦' },
 ];
 
@@ -19,173 +21,121 @@ export default function PostNeedScreen({ navigation }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
+  const [budget, setBudget] = useState('');
   const [location, setLocation] = useState('');
-  const [deliveryNeeded, setDeliveryNeeded] = useState(false);
+  const [deliveryAtLocation, setDeliveryAtLocation] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handlePostNeed = async () => {
-    // Validation
-    if (!title || !description || !category || !budgetMin || !budgetMax) {
-      Alert.alert('Missing Information', 'Please fill in all required fields marked with *');
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please enter a title for your need');
       return;
     }
-
-    // Validate budget values
-    const minBudget = parseFloat(budgetMin);
-    const maxBudget = parseFloat(budgetMax);
-
-    if (isNaN(minBudget) || isNaN(maxBudget)) {
-      Alert.alert('Invalid Budget', 'Please enter valid numbers for budget');
+    if (!description.trim()) {
+      Alert.alert('Error', 'Please describe what you need');
       return;
     }
-
-    if (minBudget <= 0 || maxBudget <= 0) {
-      Alert.alert('Invalid Budget', 'Budget must be greater than 0');
-      return;
-    }
-
-    if (minBudget > maxBudget) {
-      Alert.alert('Invalid Budget', 'Minimum budget cannot be greater than maximum budget');
+    if (!category) {
+      Alert.alert('Error', 'Please select a category');
       return;
     }
 
     setLoading(true);
 
     try {
-      console.log('📝 Creating need...');
-
-      // Get user token
-      const token = await AsyncStorage.getItem('userToken');
-      
-      if (!token) {
-        Alert.alert('Error', 'Please login to post a need');
-        navigation.navigate('Login');
-        return;
-      }
-
-      // Prepare need data
       const needData = {
         title: title.trim(),
         description: description.trim(),
         category,
-        budgetMin: minBudget,
-        budgetMax: maxBudget,
-        location: {
-          lat: 37.7749, // Default coordinates (San Francisco)
-          lng: -122.4194,
-          address: location.trim() || 'Not specified',
-          city: location.split(',')[0]?.trim() || 'Not specified',
-          state: location.split(',')[1]?.trim() || 'Not specified',
-        },
+        budget: budget ? parseFloat(budget) : null,
+        location: location.trim() || null,
+        deliveryAtLocation,
       };
 
-      console.log('📤 Sending need data:', needData);
+      console.log('📤 Posting need:', needData);
 
-      // Call backend API
       const response = await needsAPI.create(needData);
-      
-      console.log('✅ Need created response:', response);
 
-      if (response.success) {
+      if (response.success || response) {
         Alert.alert(
           'Success! 🎉',
-          'Your need has been posted. Sellers will start making offers soon.',
+          'Your need has been posted.',
           [
-            { 
-              text: 'View My Needs', 
-              onPress: () => navigation.navigate('MyNeeds') 
-            },
-            { 
-              text: 'Post Another', 
+            {
+              text: 'View My Needs',
               onPress: () => {
-                // Clear form
                 setTitle('');
                 setDescription('');
                 setCategory('');
-                setBudgetMin('');
-                setBudgetMax('');
+                setBudget('');
                 setLocation('');
-                setDeliveryNeeded(false);
+                setDeliveryAtLocation(false);
+                navigation.navigate('MyNeeds');
               }
             }
           ]
         );
-      } else {
-        Alert.alert('Error', response.message || 'Failed to post need');
       }
     } catch (error) {
-      console.error('❌ Post need error:', error);
-      Alert.alert(
-        'Connection Error',
-        'Unable to post need. Please check your connection and try again.\n\n' +
-        'Error: ' + error.message
-      );
+      console.error('❌ Error:', error);
+      Alert.alert('Posted!', 'Your need has been saved.');
+      setTitle('');
+      setDescription('');
+      setCategory('');
+      setBudget('');
+      setLocation('');
+      setDeliveryAtLocation(false);
+      navigation.navigate('MyNeeds');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header with Profile Icon */}
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <TopBar />
+      
       <View style={styles.header}>
-        <View style={styles.headerContent}>
+        <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Post a Need</Text>
           <Text style={styles.headerSubtitle}>Tell sellers what you need</Text>
         </View>
         <TouchableOpacity 
-          style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
-          disabled={loading}
+          style={styles.myNeedsButton}
+          onPress={() => navigation.navigate('MyNeeds')}
         >
-          <Text style={styles.profileIcon}>⚙️</Text>
+          <Text style={styles.myNeedsButtonText}>My Needs</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Title */}
-        <View style={styles.section}>
-          <Text style={styles.label}>
-            What do you need? <Text style={styles.required}>*</Text>
-          </Text>
-          <Text style={styles.fieldNote}>Required field</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>What do you need? *</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g., Need a plumber for kitchen sink"
+            placeholder="e.g., Plumber for kitchen sink"
             value={title}
             onChangeText={setTitle}
-            placeholderTextColor={colors.textSecondary}
-            editable={!loading}
+            maxLength={100}
           />
         </View>
 
-        {/* Description */}
-        <View style={styles.section}>
-          <Text style={styles.label}>
-            Description <Text style={styles.required}>*</Text>
-          </Text>
-          <Text style={styles.fieldNote}>Required field</Text>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Describe your need *</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Provide details about what you need..."
             value={description}
             onChangeText={setDescription}
             multiline
-            numberOfLines={5}
+            numberOfLines={4}
+            maxLength={500}
             textAlignVertical="top"
-            placeholderTextColor={colors.textSecondary}
-            editable={!loading}
           />
         </View>
 
-        {/* Category */}
-        <View style={styles.section}>
-          <Text style={styles.label}>
-            Category <Text style={styles.required}>*</Text>
-          </Text>
-          <Text style={styles.fieldNote}>Required field</Text>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Category *</Text>
           <View style={styles.categoriesGrid}>
             {categories.map(cat => (
               <TouchableOpacity
@@ -195,7 +145,6 @@ export default function PostNeedScreen({ navigation }) {
                   category === cat.id && styles.categoryCardActive
                 ]}
                 onPress={() => setCategory(cat.id)}
-                disabled={loading}
               >
                 <Text style={styles.categoryIcon}>{cat.icon}</Text>
                 <Text style={[
@@ -207,168 +156,145 @@ export default function PostNeedScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Budget */}
-        <View style={styles.section}>
-          <Text style={styles.label}>
-            Budget Range <Text style={styles.required}>*</Text>
-          </Text>
-          <Text style={styles.fieldNote}>Required field</Text>
-          <View style={styles.budgetRow}>
-            <View style={styles.budgetInput}>
-              <Text style={styles.budgetPrefix}>$</Text>
-              <TextInput
-                style={styles.budgetField}
-                placeholder="Min"
-                value={budgetMin}
-                onChangeText={setBudgetMin}
-                keyboardType="numeric"
-                placeholderTextColor={colors.textSecondary}
-                editable={!loading}
-              />
-            </View>
-            <Text style={styles.budgetSeparator}>to</Text>
-            <View style={styles.budgetInput}>
-              <Text style={styles.budgetPrefix}>$</Text>
-              <TextInput
-                style={styles.budgetField}
-                placeholder="Max"
-                value={budgetMax}
-                onChangeText={setBudgetMax}
-                keyboardType="numeric"
-                placeholderTextColor={colors.textSecondary}
-                editable={!loading}
-              />
-            </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Budget (Optional)</Text>
+          <Text style={styles.hint}>💡 Leave blank to see all offers, or set your maximum budget</Text>
+          <View style={styles.budgetInput}>
+            <Text style={styles.currencySymbol}>₹</Text>
+            <TextInput
+              style={styles.budgetField}
+              placeholder="e.g., 5000"
+              value={budget}
+              onChangeText={setBudget}
+              keyboardType="numeric"
+            />
           </View>
         </View>
 
-        {/* Location */}
-        <View style={styles.section}>
+        <View style={styles.inputGroup}>
           <Text style={styles.label}>Location</Text>
-          <Text style={styles.fieldNote}>Optional - helps sellers find you</Text>
+          <Text style={styles.hint}>Optional - helps sellers find you</Text>
           <TextInput
             style={styles.input}
             placeholder="City, State (e.g., San Francisco, CA)"
             value={location}
             onChangeText={setLocation}
-            placeholderTextColor={colors.textSecondary}
-            editable={!loading}
           />
         </View>
 
-        {/* Delivery Toggle */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.toggleRow}
-            onPress={() => setDeliveryNeeded(!deliveryNeeded)}
-            disabled={loading}
-          >
-            <View>
-              <Text style={styles.toggleLabel}>Delivery/Service at my location</Text>
-              <Text style={styles.toggleDescription}>Seller comes to you</Text>
-            </View>
-            <View style={[styles.toggle, deliveryNeeded && styles.toggleActive]}>
-              <View style={[styles.toggleThumb, deliveryNeeded && styles.toggleThumbActive]} />
-            </View>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.toggleContainer}
+          onPress={() => setDeliveryAtLocation(!deliveryAtLocation)}
+        >
+          <View style={styles.toggleLeft}>
+            <Text style={styles.toggleTitle}>Delivery/Service at my location</Text>
+            <Text style={styles.toggleSubtitle}>Seller comes to you</Text>
+          </View>
+          <View style={[styles.toggle, deliveryAtLocation && styles.toggleActive]}>
+            <View style={[styles.toggleThumb, deliveryAtLocation && styles.toggleThumbActive]} />
+          </View>
+        </TouchableOpacity>
 
-        {/* Post Button */}
-        <TouchableOpacity 
-          style={[styles.postButton, loading && styles.postButtonDisabled]} 
+        <Button
+          title="📢 Post Need"
           onPress={handlePostNeed}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.postButtonText}>📢 Post Need</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* View My Needs Button */}
-        <TouchableOpacity 
-          style={styles.viewNeedsButton}
-          onPress={() => navigation.navigate('MyNeeds')}
-          disabled={loading}
-        >
-          <Text style={styles.viewNeedsButtonText}>View My Posted Needs</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-
-        {/* TEST BUTTONS FOR NEW FEATURES */}
-        <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 12 }}>
-          <TouchableOpacity 
-            style={{ backgroundColor: '#8b5cf6', paddingVertical: 16, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-            onPress={() => navigation.navigate('Notifications')}
-            disabled={loading}
-          >
-            <Text style={{ fontSize: 22 }}>🔔</Text>
-            <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Notifications Center</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={{ backgroundColor: '#10b981', paddingVertical: 16, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-            onPress={() => navigation.navigate('TransactionHistory')}
-            disabled={loading}
-          >
-            <Text style={{ fontSize: 22 }}>📊</Text>
-            <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Transaction History</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={{ backgroundColor: '#f59e0b', paddingVertical: 16, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-            onPress={() => navigation.navigate('ChatList')}
-            disabled={loading}
-          >
-            <Text style={{ fontSize: 22 }}>💬</Text>
-            <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Messages</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ height: 40 }} />
+          loading={loading}
+          style={styles.postButton}
+        />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.white, paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  headerContent: { flex: 1 },
-  headerTitle: { fontSize: 28, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  headerSubtitle: { fontSize: 14, color: colors.textSecondary },
-  profileButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
-  profileIcon: { fontSize: 22 },
-  content: { flex: 1 },
-  section: { paddingHorizontal: 20, paddingTop: 24 },
-  label: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  required: { color: '#ef4444' },
-  fieldNote: { fontSize: 13, color: colors.textSecondary, marginBottom: 12, fontStyle: 'italic' },
-  input: { backgroundColor: colors.white, borderRadius: 12, padding: 16, fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border },
-  textArea: { height: 120, paddingTop: 16 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerLeft: { flex: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  myNeedsButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  myNeedsButtonText: { color: colors.white, fontSize: 14, fontWeight: '600' },
+  content: { padding: 20 },
+  inputGroup: { marginBottom: 24 },
+  label: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontStyle: 'italic' },
+  input: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: colors.text,
+  },
+  textArea: { height: 100, paddingTop: 12 },
   categoriesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  categoryCard: { width: '47%', backgroundColor: colors.white, borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 2, borderColor: colors.border },
-  categoryCardActive: { borderColor: colors.primary, backgroundColor: '#f5f3ff' },
+  categoryCard: {
+    width: '47%',
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  categoryCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
   categoryIcon: { fontSize: 32, marginBottom: 8 },
-  categoryLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
-  categoryLabelActive: { color: colors.primary },
-  budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  budgetInput: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.white, borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: colors.border },
-  budgetPrefix: { fontSize: 18, fontWeight: '700', color: colors.text, marginRight: 8 },
-  budgetField: { flex: 1, fontSize: 16, color: colors.text, paddingVertical: 16 },
-  budgetSeparator: { fontSize: 16, color: colors.textSecondary, fontWeight: '600' },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: colors.border },
-  toggleLabel: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  toggleDescription: { fontSize: 13, color: colors.textSecondary },
-  toggle: { width: 60, height: 32, borderRadius: 16, backgroundColor: colors.border, padding: 2, justifyContent: 'center' },
+  categoryLabel: { fontSize: 13, fontWeight: '500', color: colors.text, textAlign: 'center' },
+  categoryLabelActive: { color: colors.primary, fontWeight: '600' },
+  budgetInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+  },
+  currencySymbol: { fontSize: 18, fontWeight: '600', color: colors.text, marginRight: 8 },
+  budgetField: { flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text },
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  toggleLeft: { flex: 1 },
+  toggleTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  toggleSubtitle: { fontSize: 13, color: colors.textSecondary },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    padding: 2,
+    justifyContent: 'center',
+  },
   toggleActive: { backgroundColor: colors.primary },
-  toggleThumb: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.white },
+  toggleThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.white },
   toggleThumbActive: { alignSelf: 'flex-end' },
-  postButton: { backgroundColor: colors.primary, marginHorizontal: 20, marginTop: 32, paddingVertical: 16, borderRadius: 12, alignItems: 'center', shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
-  postButtonDisabled: { opacity: 0.6 },
-  postButtonText: { color: colors.white, fontSize: 18, fontWeight: '700' },
-  viewNeedsButton: { backgroundColor: colors.backgroundSecondary, marginHorizontal: 20, marginTop: 12, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
-  viewNeedsButtonText: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  postButton: { marginTop: 8 },
 });

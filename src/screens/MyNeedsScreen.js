@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
+import { formatINR } from '../utils/fees';
 import { needsAPI } from '../api/needs2';
 import { offersAPI } from '../api/offers2';
 
@@ -202,7 +203,7 @@ export default function MyNeedsScreen({ navigation }) {
           <View style={styles.needInfo}>
             <Text style={styles.needCategory}>📂 {item.category}</Text>
             <Text style={styles.needBudget}>
-              💰 ${item.budgetMin} - ${item.budgetMax}
+              💰 {item.budget ? formatINR(item.budget) : "₹ - ₹"}
             </Text>
           </View>
           <Text style={styles.needLocation}>📍 {item.location?.city || 'Not specified'}</Text>

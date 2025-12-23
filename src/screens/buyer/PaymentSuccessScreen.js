@@ -3,17 +3,13 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
 import { colors } from '../../theme/colors';
+import { formatINR } from '../../utils/fees';
 
 export default function PaymentSuccessScreen({ route, navigation }) {
   const { offer, need, amount } = route.params;
 
-  const handleViewTransaction = () => {
-    // TODO: Navigate to transaction detail screen
-    navigation.navigate('Home');
-  };
-
-  const handleGoHome = () => {
-    navigation.navigate('Home');
+  const handleContinue = () => {
+    navigation.navigate('MyNeeds');
   };
 
   return (
@@ -28,7 +24,7 @@ export default function PaymentSuccessScreen({ route, navigation }) {
 
         <View style={styles.amountCard}>
           <Text style={styles.amountLabel}>Amount Paid</Text>
-          <Text style={styles.amount}>${amount}</Text>
+          <Text style={styles.amount}>{formatINR(amount)}</Text>
           <Text style={styles.amountSubtext}>Held in escrow until delivery</Text>
         </View>
 
@@ -47,7 +43,7 @@ export default function PaymentSuccessScreen({ route, navigation }) {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Estimated Delivery</Text>
-            <Text style={styles.detailValue}>{offer.estimatedDelivery}</Text>
+            <Text style={styles.detailValue}>{offer.estimatedDelivery || offer.deliveryTime || 'TBD'}</Text>
           </View>
 
           <View style={styles.detailRow}>
@@ -84,18 +80,11 @@ export default function PaymentSuccessScreen({ route, navigation }) {
           </View>
         </View>
 
-        <View style={styles.actions}>
-          <Button
-            title="View Transaction"
-            onPress={handleViewTransaction}
-            style={styles.primaryButton}
-          />
-          <Button
-            title="Go to Home"
-            onPress={handleGoHome}
-            variant="outline"
-          />
-        </View>
+        <Button
+          title="Back to My Needs"
+          onPress={handleContinue}
+          style={styles.continueButton}
+        />
 
         <View style={styles.supportCard}>
           <Text style={styles.supportText}>
@@ -130,8 +119,7 @@ const styles = StyleSheet.create({
   stepContent: { flex: 1 },
   stepTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 4 },
   stepText: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
-  actions: { width: '100%', marginBottom: 24 },
-  primaryButton: { marginBottom: 12 },
+  continueButton: { width: '100%', marginBottom: 24 },
   supportCard: { backgroundColor: colors.backgroundSecondary, borderRadius: 12, padding: 16, width: '100%' },
   supportText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
 });

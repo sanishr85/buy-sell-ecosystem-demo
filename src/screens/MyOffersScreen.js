@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
+import { formatINR } from '../utils/fees';
 import { offersAPI } from '../api/offers2';
 
 const statusConfig = {
@@ -71,7 +72,7 @@ export default function MyOffersScreen({ navigation }) {
   });
 
   const formatCurrency = (amount) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
+    return `{formatINR(offer.price)}`;
   };
 
   const getTimeAgo = (dateString) => {
@@ -80,10 +81,10 @@ export default function MyOffersScreen({ navigation }) {
     const seconds = Math.floor((now - date) / 1000);
     
     if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return `${Math.floor(seconds / 604800)}w ago`;
+    if (seconds < 3600) return `{formatINR(Math.floor(seconds / 60))}m ago`;
+    if (seconds < 86400) return `{formatINR(Math.floor(seconds / 3600))}h ago`;
+    if (seconds < 604800) return `{formatINR(Math.floor(seconds / 86400))}d ago`;
+    return `{formatINR(Math.floor(seconds / 604800))}w ago`;
   };
 
   return (
@@ -157,7 +158,7 @@ export default function MyOffersScreen({ navigation }) {
           <Text style={styles.emptyText}>
             {selectedFilter === 'all' 
               ? 'Start making offers on needs to see them here'
-              : `No ${selectedFilter} offers`}
+              : `No {formatINR(selectedFilter)} offers`}
           </Text>
           <TouchableOpacity 
             style={styles.browseButton}

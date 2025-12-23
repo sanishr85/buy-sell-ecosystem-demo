@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
+import { formatINR } from '../utils/fees';
 import { offersAPI } from '../api/offers2';
 import { ordersAPI } from '../api/orders2';
 
@@ -37,6 +38,11 @@ export default function PaymentMethodScreen({ route, navigation }) {
     }
   };
 
+  // Buyer fee calculations
+  const amount = offer?.price || 0;
+  const platformFee = 0; // Buyers pay ZERO fees
+  const totalAmount = amount;
+  
   const paymentMethods = [
     { id: 'card1', type: 'Visa', last4: '4242', expiry: '12/25' },
     { id: 'card2', type: 'Mastercard', last4: '8888', expiry: '03/26' },
@@ -50,7 +56,7 @@ export default function PaymentMethodScreen({ route, navigation }) {
 
     Alert.alert(
       'Confirm Payment',
-      `Pay $${(((offer?.price || offer?.amount) || 0) * 1.05).toFixed(2)} (including 5% platform fee)?\n\nFunds will be held in escrow until service is delivered and confirmed.`,
+      `Pay ${formatINR(offer?.price || offer?.amount || 0)}?\n\nFunds will be held securely in escrow until service is delivered and confirmed.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -124,8 +130,6 @@ export default function PaymentMethodScreen({ route, navigation }) {
     );
   }
 
-  const platformFee = ((offer.price || offer.amount) || 0) * 0.05;
-  const totalAmount = ((offer.price || offer.amount) || 0) + platformFee;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -145,10 +149,6 @@ export default function PaymentMethodScreen({ route, navigation }) {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Service Amount:</Text>
             <Text style={styles.summaryValue}>${(offer.price || offer.amount)?.toFixed(2) || '0.00'}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Platform Fee (5%):</Text>
-            <Text style={styles.summaryValue}>${platformFee.toFixed(2)}</Text>
           </View>
           <View style={[styles.summaryRow, styles.summaryTotal]}>
             <Text style={styles.summaryTotalLabel}>Total Amount:</Text>

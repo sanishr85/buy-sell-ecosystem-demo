@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
+import { formatINR } from '../utils/fees';
 import { ordersAPI } from '../api/orders2';
 
 export default function BuyerOrderTrackingScreen({ route, navigation }) {
@@ -191,17 +192,12 @@ export default function BuyerOrderTrackingScreen({ route, navigation }) {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Amount:</Text>
-            <Text style={styles.detailValue}>${order.amount?.toFixed(2) || '0.00'}</Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Platform Fee (5%):</Text>
-            <Text style={styles.detailValue}>${order.platformFee?.toFixed(2) || (order.amount * 0.05).toFixed(2)}</Text>
+            <Text style={styles.detailValue}>{formatINR(order.amount?.toFixed(2) || '0.00')}</Text>
           </View>
 
           <View style={[styles.detailRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total Paid:</Text>
-            <Text style={styles.totalValue}>${((order.amount || 0) + (order.platformFee || (order.amount * 0.05))).toFixed(2)}</Text>
+            <Text style={styles.totalValue}>{formatINR(order.amount || 0)}</Text>
           </View>
 
           <View style={styles.detailRow}>

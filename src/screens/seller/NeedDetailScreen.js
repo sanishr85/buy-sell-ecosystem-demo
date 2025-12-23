@@ -1,64 +1,95 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Button from '../../components/common/Button';
 import { colors } from '../../theme/colors';
+import { formatINR } from '../../utils/fees';
+import { needsAPI } from '../../api/needs';
+import Button from '../../components/common/Button';
 
 export default function NeedDetailScreen({ route, navigation }) {
-  const { need } = route.params;
+  const { needId } = route.params;
+  const [need, setNeed] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadNeed();
+  }, []);
+
+  const loadNeed = async () => {
+    try {
+      const response = await needsAPI.getById(needId);
+      if (response.success) {
+        setNeed(response.need);
+      } else {
+        Alert.alert('Error', 'Failed to load need details');
+      }
+    } catch (error) {
+      console.error('Error loading need:', error);
+      Alert.alert('Error', 'Failed to load need details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || !need) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loading}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>← Back to Needs</Text>
+          <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Need Details</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-        <View style={styles.header}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.section}>
           <Text style={styles.title}>{need.title}</Text>
           <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>{need.category}</Text>
+            <Text style={styles.categoryText}>📁 {need.category}</Text>
           </View>
         </View>
 
-        <View style={styles.budgetSection}>
-          <Text style={styles.sectionLabel}>Budget Range</Text>
-          <Text style={styles.budgetAmount}>${need.budgetMin} - ${need.budgetMax}</Text>
-        </View>
+        {need.budget && (
+          <View style={styles.budgetCard}>
+            <Text style={styles.budgetLabel}>Buyer's Budget</Text>
+            <Text style={styles.budgetAmount}>{formatINR(need.budget)}</Text>
+          </View>
+        )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Description</Text>
+          <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.description}>{need.description}</Text>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Location</Text>
-          <Text style={styles.locationText}>📍 {need.location}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Delivery</Text>
-          <Text style={styles.deliveryText}>{need.deliveryNeeded ? '✅ Delivery or shipping required' : '❌ No delivery needed (pickup/local)'}</Text>
-        </View>
-
-        <View style={styles.buyerCard}>
-          <Text style={styles.sectionLabel}>Buyer Information</Text>
-          <View style={styles.buyerRow}>
-            <View style={styles.buyerAvatar}>
-              <Text style={styles.buyerAvatarText}>{need.buyerName[0]}</Text>
-            </View>
-            <View style={styles.buyerInfo}>
-              <Text style={styles.buyerName}>{need.buyerName}</Text>
-              <Text style={styles.buyerRating}>⭐ {need.buyerRating} rating</Text>
-            </View>
+        {need.location && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Location</Text>
+            <Text style={styles.locationText}>📍 {need.location}</Text>
           </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Posted</Text>
+          <Text style={styles.dateText}>
+            {new Date(need.createdAt).toLocaleDateString()}
+          </Text>
         </View>
 
-        <View style={styles.timeInfo}>
-          <Text style={styles.timeText}>Posted {need.timeAgo}</Text>
-        </View>
-
-        <Button title="Make an Offer" onPress={() => navigation.navigate('CreateOffer', { need })} style={styles.offerButton} />
+        <Button
+          title="Make an Offer"
+          onPress={() => navigation.navigate('CreateOffer', { need })}
+          style={styles.offerButton}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -66,27 +97,42 @@ export default function NeedDetailScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButton: { fontSize: 28, color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { padding: 20 },
-  backButton: { fontSize: 16, color: colors.primary, marginBottom: 20 },
-  header: { marginBottom: 24 },
-  title: { fontSize: 26, fontWeight: 'bold', color: colors.text, marginBottom: 12 },
-  categoryBadge: { backgroundColor: colors.primary + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' },
-  categoryText: { fontSize: 12, fontWeight: '700', color: colors.primary, textTransform: 'uppercase' },
-  budgetSection: { backgroundColor: colors.success + '10', padding: 16, borderRadius: 12, marginBottom: 24, borderWidth: 1, borderColor: colors.success + '30' },
-  sectionLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', marginBottom: 8 },
-  budgetAmount: { fontSize: 28, fontWeight: 'bold', color: colors.success },
   section: { marginBottom: 24 },
-  description: { fontSize: 16, color: colors.text, lineHeight: 24 },
-  locationText: { fontSize: 16, color: colors.text },
-  deliveryText: { fontSize: 16, color: colors.text },
-  buyerCard: { backgroundColor: colors.backgroundSecondary, padding: 16, borderRadius: 12, marginBottom: 24 },
-  buyerRow: { flexDirection: 'row', alignItems: 'center' },
-  buyerAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  buyerAvatarText: { fontSize: 20, fontWeight: 'bold', color: colors.white },
-  buyerInfo: { flex: 1 },
-  buyerName: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 2 },
-  buyerRating: { fontSize: 14, color: colors.warning, fontWeight: '500' },
-  timeInfo: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border, marginBottom: 24 },
-  timeText: { fontSize: 13, color: colors.textLight, textAlign: 'center' },
-  offerButton: { marginBottom: 20 },
+  title: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  categoryBadge: {
+    backgroundColor: colors.primary + '10',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  categoryText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  budgetCard: {
+    backgroundColor: colors.success + '10',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.success + '30',
+  },
+  budgetLabel: { fontSize: 13, color: colors.success, marginBottom: 4, fontWeight: '500' },
+  budgetAmount: { fontSize: 28, fontWeight: '700', color: colors.success },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  description: { fontSize: 15, color: colors.textSecondary, lineHeight: 22 },
+  locationText: { fontSize: 15, color: colors.text },
+  dateText: { fontSize: 15, color: colors.textSecondary },
+  offerButton: { marginTop: 16 },
 });

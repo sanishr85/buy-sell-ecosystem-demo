@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import CounterOfferModal from './CounterOfferModal';
 import { colors } from '../theme/colors';
+import { formatINR } from '../utils/fees';
 import { offersAPI } from '../api/offers2';
 import { needsAPI } from '../api/needs2';
-import CounterOfferModal from './CounterOfferModal';
 
 export default function ViewOffersScreen({ route, navigation }) {
-  const { needId, need: initialNeed } = route.params;
-  const [need, setNeed] = useState(initialNeed);
+  const { needId } = route.params;
+  const [need, setNeed] = useState(null);
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -17,32 +18,34 @@ export default function ViewOffersScreen({ route, navigation }) {
 
   useEffect(() => {
     loadData();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadData();
-    });
-    return unsubscribe;
-  }, [navigation]);
+  }, [needId]);
 
   const loadData = async () => {
     try {
-      // Load both need and offers
-      const [needResponse, offersResponse] = await Promise.all([
-        needsAPI.getById(needId),
-        offersAPI.getByNeed(needId)
-      ]);
-
+      const needResponse = await needsAPI.getById(needId);
       if (needResponse.success) {
         setNeed(needResponse.need);
       }
 
+      const offersResponse = await offersAPI.getByNeedId(needId);
       if (offersResponse.success) {
-        setOffers(offersResponse.offers || []);
+        // Sort: accepted first, then pending seller offers, then counter offers
+        const sorted = (offersResponse.offers || []).sort((a, b) => {
+          // Accepted offers first
+          if (a.status === 'accepted' && b.status !== 'accepted') return -1;
+          if (a.status !== 'accepted' && b.status === 'accepted') return 1;
+          
+          // Then original seller offers
+          if (!a.isCounterOffer && b.isCounterOffer) return -1;
+          if (a.isCounterOffer && !b.isCounterOffer) return 1;
+          
+          // Then by date
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+        setOffers(sorted);
       }
     } catch (error) {
-      console.error('❌ Load data error:', error);
+      console.error('Load error:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -54,64 +57,35 @@ export default function ViewOffersScreen({ route, navigation }) {
     loadData();
   };
 
-  const handleAcceptOffer = async (offerId) => {
+  const handleAcceptOffer = async (offer) => {
     Alert.alert(
-      'Accept Offer',
-      'Are you sure you want to accept this offer? This will decline all other offers.',
+      'Accept Offer?',
+      `Accept ${offer.sellerName}'s offer for ${formatINR(offer.price)}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Accept',
           onPress: async () => {
-            try {
-              const response = await offersAPI.accept(offerId);
-              
-              if (response.success) {
-                Alert.alert('Success', 'Offer accepted! Proceeding to payment...', [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      loadData();
-                      navigation.navigate('PaymentMethod', { offerId });
-                    }
-                  }
-                ]);
-              } else {
-                Alert.alert('Error', response.message || 'Failed to accept offer');
-              }
-            } catch (error) {
-              console.error('❌ Accept offer error:', error);
-              Alert.alert('Error', 'Failed to accept offer');
-            }
+            await offersAPI.accept(offer.id);
+            navigation.navigate('Payment', { offer, need });
           }
         }
       ]
     );
   };
 
-  const handleDeclineOffer = async (offerId) => {
+  const handleDeclineOffer = async (offer) => {
     Alert.alert(
-      'Decline Offer',
-      'Are you sure you want to decline this offer?',
+      'Decline Offer?',
+      'The seller will be notified.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Decline',
           style: 'destructive',
           onPress: async () => {
-            try {
-              const response = await offersAPI.decline(offerId);
-              
-              if (response.success) {
-                Alert.alert('Success', 'Offer declined');
-                loadData();
-              } else {
-                Alert.alert('Error', response.message || 'Failed to decline offer');
-              }
-            } catch (error) {
-              console.error('❌ Decline offer error:', error);
-              Alert.alert('Error', 'Failed to decline offer');
-            }
+            await offersAPI.decline(offer.id);
+            loadData();
           }
         }
       ]
@@ -123,277 +97,470 @@ export default function ViewOffersScreen({ route, navigation }) {
     setShowCounterModal(true);
   };
 
-  const handleSubmitCounterOffer = async ({ amount, message }) => {
-    try {
-      const response = await offersAPI.counter(selectedOffer.id, amount, message);
-      
-      if (response.success) {
-        Alert.alert('Success', 'Counter offer sent to seller!');
-        loadData();
-      } else {
-        Alert.alert('Error', response.message || 'Failed to send counter offer');
-      }
-    } catch (error) {
-      console.error('Submit counter offer error:', error);
-      Alert.alert('Error', 'Failed to send counter offer');
-    }
+  const handleSubmitCounter = async ({ amount, message }) => {
+    await offersAPI.counter(selectedOffer.id, amount, message);
+    Alert.alert('Success', 'Counter offer sent to seller');
+    setShowCounterModal(false);
+    loadData();
   };
 
-  const formatCurrency = (amount) => {
-    return `$${parseFloat(amount).toFixed(2)}`;
+  const handlePayNow = (offer) => {
+    navigation.navigate('Payment', { offer, need });
   };
 
-  const getTimeAgo = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
+  const handleRateSeller = () => {
+    Alert.alert('Coming Soon', 'Rating feature will be available soon!');
+  };
+
+  const handleRaiseDispute = () => {
+    Alert.alert('Coming Soon', 'Dispute resolution will be available soon!');
+  };
+
+  const getOfferStatusInfo = (offer) => {
+    // Don't show Pay Now if need is already delivered or in_progress
+    const needIsActive = need?.status !== 'delivered' && need?.status !== 'in_progress';
+    const notPaidYet = !offer.orderId;
     
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return `${Math.floor(seconds / 604800)}w ago`;
-  };
+    // Buyer's counter offer that was ACCEPTED by seller - needs payment
+    if (offer.isCounterOffer && offer.status === 'accepted' && needIsActive && notPaidYet) {
+      return {
+        badge: '✓ Accepted',
+        badgeColor: colors.success,
+        showActions: false,
+        showCounterSent: false,
+        showPayNow: true,
+        isAccepted: true
+      };
+    }
 
-  const getNeedStatusDisplay = () => {
-    const statusMap = {
-      'open': { label: 'Active', color: colors.success },
-      'in_progress': { label: 'In Progress', color: colors.warning },
-      'delivered': { label: 'Delivered', color: colors.primary },
-      'completed': { label: 'Completed', color: colors.success },
-      'cancelled': { label: 'Cancelled', color: colors.error },
+    // Counter offer accepted but already paid (has orderId or need in progress)
+    if (offer.isCounterOffer && offer.status === 'accepted' && (!needIsActive || offer.orderId)) {
+      return {
+        badge: '✓ Paid',
+        badgeColor: colors.primary,
+        showActions: false,
+        showCounterSent: false,
+        showPayNow: false,
+        isAccepted: true
+      };
+    }
+
+    // Buyer's counter offer waiting for seller response
+    if (offer.isCounterOffer && offer.status === 'pending') {
+      return {
+        badge: '🔄 Counter Sent',
+        badgeColor: colors.warning,
+        showActions: false,
+        showCounterSent: true,
+        showPayNow: false
+      };
+    }
+    
+    // Original offer that was countered
+    if (offer.status === 'countered') {
+      return {
+        badge: '🔄 Countered',
+        badgeColor: colors.textSecondary,
+        showActions: false,
+        showCounterSent: false,
+        showPayNow: false
+      };
+    }
+    
+    // Regular accepted seller offer (already has orderId or in progress)
+    if ((offer.status === 'accepted' || need?.acceptedOfferId === offer.id) && (!needIsActive || offer.orderId)) {
+      return {
+        badge: '✓ Paid',
+        badgeColor: colors.primary,
+        showActions: false,
+        showCounterSent: false,
+        showPayNow: false,
+        isAccepted: true
+      };
+    }
+    
+    // Regular accepted seller offer (not yet paid)
+    if ((offer.status === 'accepted' || need?.acceptedOfferId === offer.id) && needIsActive && notPaidYet) {
+      return {
+        badge: '✓ Accepted',
+        badgeColor: colors.success,
+        showActions: false,
+        showCounterSent: false,
+        showPayNow: false,
+        isAccepted: true
+      };
+    }
+    
+    // Regular pending seller offer
+    return {
+      badge: '⏳ Pending',
+      badgeColor: colors.warning,
+      showActions: true,
+      showCounterSent: false,
+      showPayNow: false
     };
-    return statusMap[need?.status] || { label: 'Active', color: colors.success };
   };
 
-  const statusConfig = {
-    pending: { label: 'Pending', color: '#f59e0b', bgColor: '#fef3c7', emoji: '⏳' },
-    accepted: { label: 'Accepted', color: '#10b981', bgColor: '#d1fae5', emoji: '✅' },
-    declined: { label: 'Declined', color: '#ef4444', bgColor: '#fee2e2', emoji: '❌' },
-  };
-
-  const pendingCount = offers.filter(o => o.status === 'pending').length;
-  const needStatus = getNeedStatusDisplay();
+  const isDelivered = need?.status === 'delivered';
+  const acceptedOffer = offers.find(o => o.status === 'accepted' || need?.acceptedOfferId === o.id);
+  const pendingCount = offers.filter(o => o.status === 'pending' && !o.isCounterOffer).length;
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>←</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Offers Received</Text>
-          <Text style={styles.subtitle}>{pendingCount} pending offers</Text>
-        </View>
-        <TouchableOpacity style={styles.chatButton} onPress={() => Alert.alert('Coming Soon', 'Chat feature coming soon!')}>
+        <Text style={styles.headerTitle}>Offers Received</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('ChatList')}>
           <Text style={styles.chatIcon}>💬</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.needSummary}>
-        <Text style={styles.needTitle}>Your Need</Text>
-        {need?.budgetMin && need?.budgetMax && (
-          <Text style={styles.needBudget}>Your Budget: ${need.budgetMin} - ${need.budgetMax}</Text>
-        )}
-        <Text style={styles.needStatus}>
-          Status: <Text style={{ color: needStatus.color }}>● {needStatus.label}</Text>
-        </Text>
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading offers...</Text>
-        </View>
-      ) : offers.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>📭</Text>
-          <Text style={styles.emptyTitle}>No offers yet</Text>
-          <Text style={styles.emptyText}>
-            Sellers will submit offers soon. Check back later!
+      {need && (
+        <View style={styles.needSummary}>
+          <Text style={styles.needLabel}>Your Need</Text>
+          <Text style={styles.needStatus}>
+            Status: <Text style={[styles.statusText, 
+              isDelivered ? styles.statusDelivered : styles.statusActive
+            ]}>● {isDelivered ? 'Delivered' : 'Active'}</Text>
           </Text>
+          <Text style={styles.offerCount}>{pendingCount} pending {pendingCount === 1 ? 'offer' : 'offers'}</Text>
         </View>
-      ) : (
-        <ScrollView 
-          style={styles.offersList}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          {offers.map((offer) => {
-            const config = statusConfig[offer.status] || statusConfig.pending;
-            const isPending = offer.status === 'pending';
-            
-            return (
-              <View key={offer.id} style={styles.offerCard}>
-                <View style={styles.sellerSection}>
-                  <View style={styles.sellerAvatar}>
-                    <Text style={styles.sellerAvatarText}>
-                      {offer.sellerName?.substring(0, 2).toUpperCase() || 'SE'}
-                    </Text>
-                  </View>
-                  <View style={styles.sellerInfo}>
-                    <Text style={styles.sellerName}>{offer.sellerName || 'Seller'}</Text>
-                    {offer.sellerRating && (
-                      <Text style={styles.sellerRating}>
-                        ⭐ {offer.sellerRating.average?.toFixed(1) || '0.0'} ({offer.sellerRating.total || 0} reviews)
-                      </Text>
-                    )}
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: config.bgColor }]}>
-                    <Text style={[styles.statusText, { color: config.color }]}>
-                      {config.emoji} {config.label}
-                    </Text>
-                  </View>
+      )}
+
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {offers.map((offer) => {
+          const statusInfo = getOfferStatusInfo(offer);
+          const isThisAcceptedOffer = statusInfo.isAccepted;
+          const showDeliveryActions = isDelivered && isThisAcceptedOffer;
+          
+          return (
+            <View 
+              key={offer.id} 
+              style={[styles.offerCard, isThisAcceptedOffer && styles.offerCardAccepted]}
+            >
+              <View style={styles.offerHeader}>
+                <View style={styles.sellerAvatar}>
+                  <Text style={styles.sellerAvatarText}>
+                    {offer.sellerName?.[0] || 'D'}
+                  </Text>
                 </View>
-
-                <View style={styles.offerDetails}>
-                  <View style={styles.offerDetailRow}>
-                    <Text style={styles.offerDetailLabel}>Offer Amount:</Text>
-                    <Text style={styles.offerAmount}>{formatCurrency(offer.amount || offer.price)}</Text>
-                  </View>
-                  <View style={styles.offerDetailRow}>
-                    <Text style={styles.offerDetailLabel}>Delivery Time:</Text>
-                    <Text style={styles.offerDetailValue}>
-                      {offer.deliveryTime || offer.estimatedDeliveryDays || 'Not specified'}
-                    </Text>
-                  </View>
+                <View style={styles.sellerInfo}>
+                  <Text style={styles.sellerName}>{offer.sellerName || 'Demo Seller'}</Text>
                 </View>
+                <View style={[styles.statusBadge, { backgroundColor: statusInfo.badgeColor + '15' }]}>
+                  <Text style={[styles.statusBadgeText, { color: statusInfo.badgeColor }]}>
+                    {statusInfo.badge}
+                  </Text>
+                </View>
+              </View>
 
-                {offer.description && (
-                  <View style={styles.messageSection}>
-                    <Text style={styles.messageLabel}>Message:</Text>
-                    <Text style={styles.messageText}>{offer.description}</Text>
-                  </View>
-                )}
-
-                <Text style={styles.offerTime}>{getTimeAgo(offer.createdAt)}</Text>
-
-                {isPending && (
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity 
-                      style={[styles.actionButton, styles.acceptButton]}
-                      onPress={() => handleAcceptOffer(offer.id)}
-                    >
-                      <Text style={styles.acceptButtonText}>✓ Accept</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.actionButton, styles.counterButton]}
-                      onPress={() => handleCounterOffer(offer)}
-                    >
-                      <Text style={styles.counterButtonText}>↔️ Counter</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={[styles.actionButton, styles.declineButton]}
-                      onPress={() => handleDeclineOffer(offer.id)}
-                    >
-                      <Text style={styles.declineButtonText}>✕ Decline</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* Payment button for accepted counter offers */}
-                {offer.status === 'accepted' && offer.isCounterOffer && !['delivered', 'completed'].includes(need?.status) && (
-                  <TouchableOpacity
-                    style={styles.proceedPaymentButton}
-                    onPress={() => navigation.navigate('PaymentMethod', { offer, need })}
-                  >
-                    <Text style={styles.proceedPaymentText}>💳 Proceed to Payment</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Delivered order actions */}
-                {need?.status === 'delivered' && (
-                  <View style={styles.deliveredActions}>
-                    <Text style={styles.deliveredTitle}>✅ Service Delivered</Text>
-                    <View style={styles.disputeNotice}>
-                      <Text style={styles.disputeNoticeText}>⏰ Raise dispute within 48 hours</Text>
-                      <Text style={styles.disputeNoticeSubtext}>💰 Payment will be automatically released to seller after dispute window closes</Text>
-                    </View>
-                    <TouchableOpacity 
-                      style={styles.rateSellerButton}
-                      onPress={() => Alert.alert('Rate Seller', 'Rating feature coming soon!')}
-                    >
-                      <Text style={styles.rateSellerText}>⭐ Rate Seller</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.raiseDisputeButton}
-                      onPress={() => Alert.alert('Raise Dispute', 'Dispute feature coming soon!')}
-                    >
-                      <Text style={styles.raiseDisputeText}>⚠️ Raise Dispute</Text>
-                    </TouchableOpacity>
+              <View style={styles.offerDetails}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Offer Amount:</Text>
+                  <Text style={styles.detailValue}>{formatINR(offer.price)}</Text>
+                </View>
+                {offer.estimatedDelivery && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Delivery Time:</Text>
+                    <Text style={styles.detailValue}>{offer.estimatedDelivery}</Text>
                   </View>
                 )}
               </View>
-            );
-          })}
-        </ScrollView>
-      )}
 
-      <CounterOfferModal
-        visible={showCounterModal}
-        onClose={() => setShowCounterModal(false)}
-        originalOffer={selectedOffer}
-        onSubmit={handleSubmitCounterOffer}
-      />
+              {offer.message && (
+                <View style={styles.messageSection}>
+                  <Text style={styles.messageLabel}>Message:</Text>
+                  <Text style={styles.messageText} numberOfLines={2}>{offer.message}</Text>
+                </View>
+              )}
+
+              <Text style={styles.timestamp}>
+                {offer.createdAt || 'Just now'}
+              </Text>
+
+              {/* Accept/Counter/Decline for pending seller offers */}
+              {statusInfo.showActions && (
+                <View style={styles.actions}>
+                  <TouchableOpacity 
+                    style={styles.acceptButton}
+                    onPress={() => handleAcceptOffer(offer)}
+                  >
+                    <Text style={styles.acceptButtonText}>✓ Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.counterButton}
+                    onPress={() => handleCounterOffer(offer)}
+                  >
+                    <Text style={styles.counterButtonText}>🔄 Counter</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.declineButton}
+                    onPress={() => handleDeclineOffer(offer)}
+                  >
+                    <Text style={styles.declineButtonText}>✕ Decline</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Counter sent waiting message */}
+              {statusInfo.showCounterSent && (
+                <View style={styles.counterSentBox}>
+                  <Text style={styles.counterSentText}>
+                    ⏳ Waiting for seller's response to your counter offer
+                  </Text>
+                </View>
+              )}
+
+              {/* Pay Now for accepted counter offers */}
+              {statusInfo.showPayNow && (
+                <View style={styles.payNowContainer}>
+                  <View style={styles.acceptedNotice}>
+                    <Text style={styles.acceptedNoticeIcon}>🎉</Text>
+                    <Text style={styles.acceptedNoticeText}>
+                      Seller accepted your counter offer!
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.payNowButton}
+                    onPress={() => handlePayNow(offer)}
+                  >
+                    <Text style={styles.payNowButtonText}>
+                      💳 Pay Now - {formatINR(offer.price)}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Delivery actions - ONLY for accepted AND delivered */}
+              {showDeliveryActions && (
+                <>
+                  <View style={styles.deliveredBanner}>
+                    <Text style={styles.deliveredIcon}>✅</Text>
+                    <Text style={styles.deliveredText}>Service Delivered</Text>
+                  </View>
+
+                  <View style={styles.disputeInfo}>
+                    <Text style={styles.disputeIcon}>⏰</Text>
+                    <View style={styles.disputeTextContainer}>
+                      <Text style={styles.disputeTitle}>Raise dispute within 48 hours</Text>
+                      <Text style={styles.disputeSubtext}>
+                        💰 Payment will be automatically released to seller after dispute window closes
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.actions}>
+                    <TouchableOpacity 
+                      style={styles.rateButton}
+                      onPress={handleRateSeller}
+                    >
+                      <Text style={styles.rateButtonText}>⭐ Rate Seller</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.disputeButton}
+                      onPress={handleRaiseDispute}
+                    >
+                      <Text style={styles.disputeButtonText}>⚠️ Raise Dispute</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          );
+        })}
+
+        {offers.length === 0 && !loading && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>📭</Text>
+            <Text style={styles.emptyText}>No offers yet</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Counter Offer Modal */}
+      {selectedOffer && (
+        <CounterOfferModal
+          visible={showCounterModal}
+          onClose={() => {
+            setShowCounterModal(false);
+            setSelectedOffer(null);
+          }}
+          originalOffer={selectedOffer}
+          onSubmit={handleSubmitCounter}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
-  backButtonText: { fontSize: 24, color: colors.text },
-  headerContent: { flex: 1, marginLeft: 16 },
-  title: { fontSize: 20, fontWeight: 'bold', color: colors.text },
-  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
-  chatButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary + '20', alignItems: 'center', justifyContent: 'center' },
-  chatIcon: { fontSize: 20 },
-  needSummary: { backgroundColor: colors.white, padding: 16, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  needTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  needBudget: { fontSize: 14, color: colors.success, fontWeight: '600', marginBottom: 4 },
-  needStatus: { fontSize: 14, color: colors.textSecondary },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
-  offersList: { flex: 1 },
-  offerCard: { backgroundColor: colors.white, margin: 16, marginBottom: 8, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
-  sellerSection: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  sellerAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  sellerAvatarText: { fontSize: 16, fontWeight: 'bold', color: colors.white },
-  sellerInfo: { flex: 1, marginLeft: 12 },
-  sellerName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 2 },
-  sellerRating: { fontSize: 13, color: colors.textSecondary },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButton: { fontSize: 24, color: colors.text },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: colors.text },
+  chatIcon: { fontSize: 24 },
+  needSummary: {
+    backgroundColor: colors.white,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  needLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  needStatus: { fontSize: 14, color: colors.textSecondary, marginBottom: 4 },
+  statusText: { fontWeight: '600' },
+  statusActive: { color: colors.success },
+  statusDelivered: { color: colors.primary },
+  offerCount: { fontSize: 14, color: colors.textSecondary },
+  content: { padding: 20 },
+  offerCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  offerCardAccepted: {
+    borderColor: colors.success,
+    borderWidth: 2,
+  },
+  offerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  sellerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  sellerAvatarText: { fontSize: 20, fontWeight: '700', color: colors.white },
+  sellerInfo: { flex: 1 },
+  sellerName: { fontSize: 16, fontWeight: '600', color: colors.text },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  statusText: { fontSize: 12, fontWeight: '700' },
-  offerDetails: { marginBottom: 16 },
-  offerDetailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  offerDetailLabel: { fontSize: 14, color: colors.textSecondary },
-  offerAmount: { fontSize: 18, fontWeight: '700', color: colors.success },
-  offerDetailValue: { fontSize: 14, fontWeight: '600', color: colors.text },
-  messageSection: { marginBottom: 16 },
-  messageLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  statusBadgeText: { fontSize: 12, fontWeight: '700' },
+  offerDetails: { marginBottom: 12 },
+  detailRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    marginBottom: 8 
+  },
+  detailLabel: { fontSize: 14, color: colors.textSecondary },
+  detailValue: { fontSize: 16, fontWeight: '600', color: colors.success },
+  messageSection: { marginBottom: 12 },
+  messageLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 4 },
   messageText: { fontSize: 14, color: colors.text, lineHeight: 20 },
-  offerTime: { fontSize: 12, color: colors.textLight, marginBottom: 16 },
-  actionButtons: { flexDirection: 'row', gap: 8 },
-  actionButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  acceptButton: { backgroundColor: colors.success },
-  acceptButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  counterButton: { backgroundColor: colors.primary },
-  counterButtonText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  declineButton: { backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border },
-  declineButtonText: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  proceedPaymentButton: { backgroundColor: colors.success, padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 12 },
-  proceedPaymentText: { color: colors.white, fontSize: 15, fontWeight: '700' },
-  deliveredActions: { marginTop: 20, padding: 16, backgroundColor: colors.white, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  deliveredTitle: { fontSize: 18, fontWeight: '700', color: colors.success, marginBottom: 16, textAlign: 'center' },
-  disputeNotice: { backgroundColor: '#FFF4E6', padding: 12, borderRadius: 8, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#F59E0B' },
-  disputeNoticeText: { fontSize: 14, fontWeight: '600', color: '#92400E', marginBottom: 4 },
-  disputeNoticeSubtext: { fontSize: 13, color: '#78350F' },
-  rateSellerButton: { backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
-  rateSellerText: { color: colors.white, fontSize: 16, fontWeight: '700' },
-  raiseDisputeButton: { backgroundColor: colors.white, padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 2, borderColor: colors.error },
-  raiseDisputeText: { color: colors.error, fontSize: 16, fontWeight: '700' },
+  timestamp: { fontSize: 12, color: colors.textLight, marginBottom: 12 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  acceptButton: {
+    flex: 1,
+    backgroundColor: colors.success,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  acceptButtonText: { fontSize: 14, fontWeight: '600', color: colors.white },
+  counterButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  counterButtonText: { fontSize: 14, fontWeight: '600', color: colors.white },
+  declineButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  declineButtonText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  rateButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  rateButtonText: { fontSize: 14, fontWeight: '600', color: colors.white },
+  disputeButton: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: colors.error,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  disputeButtonText: { fontSize: 14, fontWeight: '700', color: colors.error },
+  counterSentBox: {
+    backgroundColor: colors.warning + '15',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  counterSentText: { fontSize: 13, color: colors.warning, fontWeight: '500', textAlign: 'center' },
+  payNowContainer: { marginTop: 12 },
+  acceptedNotice: {
+    backgroundColor: colors.success + '15',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  acceptedNoticeIcon: { fontSize: 20, marginRight: 8 },
+  acceptedNoticeText: { fontSize: 14, fontWeight: '600', color: colors.success },
+  payNowButton: {
+    backgroundColor: colors.primary,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  payNowButtonText: { fontSize: 16, fontWeight: '700', color: colors.white },
+  deliveredBanner: {
+    backgroundColor: colors.success + '15',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  deliveredIcon: { fontSize: 20, marginRight: 6 },
+  deliveredText: { fontSize: 14, fontWeight: '700', color: colors.success },
+  disputeInfo: {
+    backgroundColor: '#FFF4E5',
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#FFB74D'
+  },
+  disputeIcon: { fontSize: 20, marginRight: 8 },
+  disputeTextContainer: { flex: 1 },
+  disputeTitle: { fontSize: 13, fontWeight: '700', color: '#E65100', marginBottom: 2 },
+  disputeSubtext: { fontSize: 12, color: '#EF6C00', lineHeight: 16 },
+  emptyState: { alignItems: 'center', paddingVertical: 60 },
+  emptyIcon: { fontSize: 64, marginBottom: 16 },
+  emptyText: { fontSize: 16, color: colors.textSecondary },
 });

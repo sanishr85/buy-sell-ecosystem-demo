@@ -54,7 +54,7 @@ export default function ChatListScreen({ navigation }) {
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Messages</Text>
           <Text style={styles.headerSubtitle}>
-            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+            {unreadCount > 0 ? `₹{unreadCount} unread` : 'All caught up'}
           </Text>
         </View>
       </View>

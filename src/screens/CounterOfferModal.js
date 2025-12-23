@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
 import { colors } from '../theme/colors';
+import { formatINR } from '../utils/fees';
 
 export default function CounterOfferModal({ visible, onClose, originalOffer, onSubmit }) {
   const [counterAmount, setCounterAmount] = useState(originalOffer?.price?.toString() || '');
@@ -28,7 +29,10 @@ export default function CounterOfferModal({ visible, onClose, originalOffer, onS
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.overlay}
+      >
         <View style={styles.modal}>
           <View style={styles.header}>
             <Text style={styles.title}>Counter Offer</Text>
@@ -37,16 +41,16 @@ export default function CounterOfferModal({ visible, onClose, originalOffer, onS
             </TouchableOpacity>
           </View>
 
-          <View style={styles.content}>
+          <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.originalOffer}>
               <Text style={styles.label}>Original Offer</Text>
-              <Text style={styles.originalAmount}>${originalOffer?.price}</Text>
+              <Text style={styles.originalAmount}>{formatINR(originalOffer?.price)}</Text>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Your Counter Offer *</Text>
               <View style={styles.amountInput}>
-                <Text style={styles.dollarSign}>$</Text>
+                <Text style={styles.dollarSign}>₹</Text>
                 <TextInput
                   style={styles.input}
                   value={counterAmount}
@@ -75,7 +79,7 @@ export default function CounterOfferModal({ visible, onClose, originalOffer, onS
                 You can only send one counter offer. The seller can accept or decline.
               </Text>
             </View>
-          </View>
+          </ScrollView>
 
           <View style={styles.footer}>
             <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
@@ -92,7 +96,7 @@ export default function CounterOfferModal({ visible, onClose, originalOffer, onS
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

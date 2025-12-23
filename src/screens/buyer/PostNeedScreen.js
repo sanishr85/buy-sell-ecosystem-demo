@@ -1,136 +1,266 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
 import { colors } from '../../theme/colors';
-
-const CATEGORIES = ['Electronics', 'Home Services', 'Food & Dining', 'Transportation', 'Health & Wellness', 'Education', 'Fashion & Apparel', 'Other'];
+import CategorySelector from '../../components/CategorySelector';
+import { needsAPI } from '../../api/needs';
 
 export default function PostNeedScreen({ navigation }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
+  const [budget, setBudget] = useState('');
   const [location, setLocation] = useState('');
-  const [deliveryNeeded, setDeliveryNeeded] = useState(false);
+  const [deliveryAtLocation, setDeliveryAtLocation] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showCategories, setShowCategories] = useState(false);
-  const [errors, setErrors] = useState({});
 
-  const validateForm = () => {
-    const newErrors = {};
-    if (!title || title.length < 10) newErrors.title = 'Title must be at least 10 characters';
-    if (!description || description.length < 20) newErrors.description = 'Please provide more details (min 20 characters)';
-    if (!category) newErrors.category = 'Please select a category';
-    if (!budgetMin || !budgetMax) {
-      newErrors.budget = 'Please enter budget range';
-    } else if (parseFloat(budgetMax) < parseFloat(budgetMin)) {
-      newErrors.budget = 'Maximum budget must be greater than minimum';
+  const handlePostNeed = async () => {
+    if (!title.trim()) {
+      Alert.alert('Error', 'Please enter a title for your need');
+      return;
     }
-    if (!location) newErrors.location = 'Location is required';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+    if (!description.trim()) {
+      Alert.alert('Error', 'Please describe what you need');
+      return;
+    }
+    if (!category) {
+      Alert.alert('Error', 'Please select a category');
+      return;
+    }
 
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
     setLoading(true);
-    const needData = { title, description, category, budgetMin: parseFloat(budgetMin), budgetMax: parseFloat(budgetMax), location, deliveryNeeded };
-    console.log('Creating need:', needData);
-    setTimeout(() => { setLoading(false); navigation.goBack(); }, 1500);
+
+    try {
+      const needData = {
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        budget: budget ? parseFloat(budget) : null,
+        location: location.trim() || null,
+        deliveryAtLocation,
+      };
+
+      console.log('📤 Posting need:', needData);
+
+      const response = await needsAPI.create(needData);
+
+      console.log('✅ Need posted:', response);
+
+      if (response.success) {
+        Alert.alert(
+          'Success! 🎉',
+          'Your need has been posted. Sellers will start sending offers soon.',
+          [
+            {
+              text: 'View My Needs',
+              onPress: () => navigation.navigate('MyNeeds')
+            }
+          ]
+        );
+
+        // Reset form
+        setTitle('');
+        setDescription('');
+        setCategory('');
+        setBudget('');
+        setLocation('');
+        setDeliveryAtLocation(false);
+      } else {
+        Alert.alert('Error', response.message || 'Failed to post need');
+      }
+    } catch (error) {
+      console.error('❌ Post need error:', error);
+      Alert.alert('Error', 'Failed to post your need. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={styles.backButton}>← Back</Text>
-            </TouchableOpacity>
-            <Text style={styles.title}>Post a Need</Text>
-            <Text style={styles.subtitle}>Tell sellers what you're looking for</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header with My Needs button */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Post a Need</Text>
+          <Text style={styles.headerSubtitle}>Tell sellers what you need</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.myNeedsButton}
+          onPress={() => navigation.navigate('MyNeeds')}
+        >
+          <Text style={styles.myNeedsButtonText}>My Needs</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Title */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>What do you need? *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., Plumber for kitchen sink"
+            value={title}
+            onChangeText={setTitle}
+            maxLength={100}
+          />
+        </View>
+
+        {/* Description */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Describe your need *</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Provide details about what you need..."
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            maxLength={500}
+            textAlignVertical="top"
+          />
+        </View>
+
+        {/* Category */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Category *</Text>
+          <CategorySelector
+            selectedCategory={category}
+            onSelectCategory={setCategory}
+          />
+        </View>
+
+        {/* Budget */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Budget (Optional)</Text>
+          <Text style={styles.hint}>💡 Leave blank to see all offers, or set your maximum budget</Text>
+          <View style={styles.budgetInput}>
+            <Text style={styles.currencySymbol}>₹</Text>
+            <TextInput
+              style={styles.budgetField}
+              placeholder="e.g., 5000"
+              value={budget}
+              onChangeText={setBudget}
+              keyboardType="numeric"
+            />
           </View>
-          <View style={styles.form}>
-            <View>
-              <Input label="What do you need? *" placeholder="e.g., iPhone 15 Pro Max 256GB" value={title} onChangeText={setTitle} error={errors.title} />
-              <Text style={styles.fieldNote}>Be specific to help sellers find you (minimum 10 characters)</Text>
-            </View>
-            <Input label="Description *" placeholder="Provide details about what you're looking for..." value={description} onChangeText={setDescription} multiline error={errors.description} />
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Category *</Text>
-              <TouchableOpacity style={[styles.categoryButton, errors.category && styles.inputError]} onPress={() => setShowCategories(!showCategories)}>
-                <Text style={category ? styles.categoryText : styles.placeholderText}>{category || 'Select a category'}</Text>
-                <Text style={styles.arrow}>{showCategories ? '▲' : '▼'}</Text>
-              </TouchableOpacity>
-              {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
-              {showCategories && (
-                <View style={styles.categoriesDropdown}>
-                  {CATEGORIES.map((cat) => (
-                    <TouchableOpacity key={cat} style={styles.categoryOption} onPress={() => { setCategory(cat); setShowCategories(false); setErrors({ ...errors, category: null }); }}>
-                      <Text style={styles.categoryOptionText}>{cat}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-            <View style={styles.budgetContainer}>
-              <Text style={styles.label}>Budget Range (USD) *</Text>
-              <View style={styles.budgetRow}>
-                <View style={styles.budgetInput}><Input placeholder="Min" value={budgetMin} onChangeText={setBudgetMin} keyboardType="numeric" /></View>
-                <Text style={styles.budgetSeparator}>to</Text>
-                <View style={styles.budgetInput}><Input placeholder="Max" value={budgetMax} onChangeText={setBudgetMax} keyboardType="numeric" /></View>
-              </View>
-              {errors.budget && <Text style={styles.errorText}>{errors.budget}</Text>}
-            </View>
-            <Input label="Location *" placeholder="City or Area" value={location} onChangeText={setLocation} error={errors.location} />
-            <View style={styles.switchContainer}>
-              <View style={styles.switchLeft}>
-                <Text style={styles.switchLabel}>Delivery Needed?</Text>
-                <Text style={styles.switchSubtext}>Seller will ship or deliver</Text>
-              </View>
-              <Switch value={deliveryNeeded} onValueChange={setDeliveryNeeded} trackColor={{ false: colors.border, true: colors.primary }} thumbColor={colors.white} />
-            </View>
-            <Button title="Post Need" onPress={handleSubmit} loading={loading} style={styles.submitButton} />
-            <Text style={styles.infoText}>Your need will be visible to sellers in your area for 7 days</Text>
+        </View>
+
+        {/* Location */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Location</Text>
+          <Text style={styles.hint}>Optional - helps sellers find you</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="City, State (e.g., San Francisco, CA)"
+            value={location}
+            onChangeText={setLocation}
+          />
+        </View>
+
+        {/* Delivery at location toggle */}
+        <TouchableOpacity
+          style={styles.toggleContainer}
+          onPress={() => setDeliveryAtLocation(!deliveryAtLocation)}
+        >
+          <View style={styles.toggleLeft}>
+            <Text style={styles.toggleTitle}>Delivery/Service at my location</Text>
+            <Text style={styles.toggleSubtitle}>Seller comes to you</Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={[styles.toggle, deliveryAtLocation && styles.toggleActive]}>
+            <View style={[styles.toggleThumb, deliveryAtLocation && styles.toggleThumbActive]} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Post Button */}
+        <Button
+          title="📢 Post Need"
+          onPress={handlePostNeed}
+          loading={loading}
+          style={styles.postButton}
+        />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  keyboardView: { flex: 1 },
-  scrollContent: { padding: 20 },
-  header: { marginBottom: 24 },
-  backButton: { fontSize: 16, color: colors.primary, marginBottom: 16 },
-  title: { fontSize: 28, fontWeight: 'bold', color: colors.text, marginBottom: 4 },
-  subtitle: { fontSize: 16, color: colors.textSecondary },
-  form: { width: '100%' },
-  inputContainer: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8 },
-  fieldNote: { fontSize: 12, color: colors.textLight, marginTop: -12, marginBottom: 16, fontStyle: 'italic' },
-  categoryButton: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  inputError: { borderColor: colors.danger },
-  categoryText: { fontSize: 16, color: colors.text },
-  placeholderText: { fontSize: 16, color: colors.textLight },
-  arrow: { fontSize: 12, color: colors.textSecondary },
-  categoriesDropdown: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginTop: 8, overflow: 'hidden' },
-  categoryOption: { padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  categoryOptionText: { fontSize: 16, color: colors.text },
-  budgetContainer: { marginBottom: 16 },
-  budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  budgetInput: { flex: 1 },
-  budgetSeparator: { fontSize: 16, color: colors.textSecondary, marginTop: -16 },
-  switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.backgroundSecondary, padding: 16, borderRadius: 12, marginBottom: 24 },
-  switchLeft: { flex: 1 },
-  switchLabel: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 2 },
-  switchSubtext: { fontSize: 13, color: colors.textSecondary },
-  submitButton: { marginBottom: 12 },
-  errorText: { color: colors.danger, fontSize: 12, marginTop: 4 },
-  infoText: { textAlign: 'center', fontSize: 13, color: colors.textLight, fontStyle: 'italic' },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerLeft: { flex: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '700', color: colors.text },
+  headerSubtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  myNeedsButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  myNeedsButtonText: { color: colors.white, fontSize: 14, fontWeight: '600' },
+  content: { padding: 20 },
+  inputGroup: { marginBottom: 24 },
+  label: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8 },
+  hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontStyle: 'italic' },
+  input: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: colors.text,
+  },
+  textArea: { height: 100, paddingTop: 12 },
+  budgetInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+  },
+  currencySymbol: { fontSize: 18, fontWeight: '600', color: colors.text, marginRight: 8 },
+  budgetField: { flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text },
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  toggleLeft: { flex: 1 },
+  toggleTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 4 },
+  toggleSubtitle: { fontSize: 13, color: colors.textSecondary },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleActive: { backgroundColor: colors.primary },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+  },
+  toggleThumbActive: { alignSelf: 'flex-end' },
+  postButton: { marginTop: 8 },
 });

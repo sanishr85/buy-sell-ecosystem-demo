@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
+import { formatINR } from '../../utils/fees';
 
 // Mock offers data
 const MOCK_MY_OFFERS = [
@@ -174,7 +175,7 @@ export default function MyOffersScreen({ navigation }) {
           </View>
         ) : (
           filteredOffers.map((offer) => (
-            <TouchableOpacity key={offer.id} style={styles.offerCard} onPress={() => navigation.navigate('OfferStatus', { offer })}>
+            <TouchableOpacity key={offer.id} style={styles.offerCard} onPress={() => navigation.navigate('OfferDetails', { offer })}>
               <View style={styles.offerHeader}>
                 <View style={styles.offerHeaderLeft}>
                   <Text style={styles.offerTitle}>{offer.needTitle}</Text>
@@ -188,7 +189,7 @@ export default function MyOffersScreen({ navigation }) {
 
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Your Offer</Text>
-                <Text style={styles.priceValue}>${offer.price}</Text>
+                <Text style={styles.priceValue}>{formatINR(offer.price)}</Text>
               </View>
 
               {offer.status === 'pending' && (
