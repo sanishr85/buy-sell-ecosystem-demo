@@ -53,51 +53,44 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.navigate("Welcome")} style={styles.backButton}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.emoji}>🎭</Text>
-          <Text style={styles.title}>Demo Mode</Text>
-          <Text style={styles.subtitle}>
-            Explore the full app with simulated data.{'\n'}
-            Choose your role to get started:
-          </Text>
-        </View>
+        <Text style={styles.emoji}>🎭</Text>
+        <Text style={styles.title}>Demo Mode</Text>
+        <Text style={styles.subtitle}>
+          Explore the full app with simulated data.{'\n'}
+          Choose your role to get started:
+        </Text>
 
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={[styles.roleCard, { backgroundColor: '#E3F2FD' }]}
+          <Button
+            title="🛒 Login as Buyer"
             onPress={() => handleDemoLogin('buyer')}
-            disabled={loading}
-          >
-            <Text style={styles.roleEmoji}>🛒</Text>
-            <Text style={styles.roleTitle}>Login as Buyer</Text>
-            <Text style={styles.roleDesc}>Post needs and hire sellers</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.roleCard, { backgroundColor: '#F3E5F5' }]}
+            loading={loading}
+            style={styles.button}
+          />
+          <Button
+            title="💼 Login as Seller"
             onPress={() => handleDemoLogin('seller')}
-            disabled={loading}
-          >
-            <Text style={styles.roleEmoji}>💼</Text>
-            <Text style={styles.roleTitle}>Login as Seller</Text>
-            <Text style={styles.roleDesc}>Browse needs and make offers</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.roleCard, { backgroundColor: '#E8F5E9' }]}
+            loading={loading}
+            style={styles.button}
+          />
+          <Button
+            title="👥 Login as Both"
             onPress={() => handleDemoLogin('both')}
-            disabled={loading}
-          >
-            <Text style={styles.roleEmoji}>👥</Text>
-            <Text style={styles.roleTitle}>Login as Both</Text>
-            <Text style={styles.roleDesc}>Experience buyer & seller features</Text>
-          </TouchableOpacity>
+            loading={loading}
+            style={styles.button}
+          />
         </View>
 
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
-          <Text style={styles.infoText}>
+        <View style={styles.notice}>
+          <Text style={styles.noticeIcon}>ℹ️</Text>
+          <Text style={styles.noticeText}>
             All data is simulated. No real transactions, payments, or backend connections.
           </Text>
         </View>
@@ -107,32 +100,70 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1, padding: 20, justifyContent: 'center' },
-  header: { alignItems: 'center', marginBottom: 40 },
-  emoji: { fontSize: 64, marginBottom: 16 },
-  title: { fontSize: 32, fontWeight: 'bold', color: colors.text, marginBottom: 8 },
-  subtitle: { fontSize: 16, color: colors.textSecondary, textAlign: 'center', lineHeight: 24 },
-  buttonContainer: { gap: 16, marginBottom: 30 },
-  roleCard: {
-    padding: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
   },
-  roleEmoji: { fontSize: 40, marginBottom: 8 },
-  roleTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  roleDesc: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
-  infoBox: {
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  backButton: {
+    padding: 4,
+  },
+  backText: {
+    fontSize: 18,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  emoji: {
+    fontSize: 80,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+  },
+  buttonContainer: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 32,
+  },
+  button: {
+    width: '100%',
+  },
+  notice: {
     flexDirection: 'row',
+    backgroundColor: '#FFF4E5',
     padding: 16,
-    backgroundColor: '#FFF4E6',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#FFE0B2',
+    borderColor: '#FFB74D',
     alignItems: 'center',
   },
-  infoIcon: { fontSize: 24, marginRight: 12 },
-  infoText: { flex: 1, fontSize: 13, color: '#E65100', lineHeight: 18 },
+  noticeIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#E65100',
+    lineHeight: 20,
+  },
 });
