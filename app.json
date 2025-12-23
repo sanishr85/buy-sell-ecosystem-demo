@@ -1,11 +1,13 @@
 {
   "expo": {
-    "name": "Marketplace Demo",
-    "slug": "marketplace-demo",
+    "name": "Zonzy",
+    "slug": "zonzy-marketplace",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -14,28 +16,23 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.marketplace.demo",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "bundleIdentifier": "com.zonzybse.marketplace"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.yourcompany.marketplace.demo"
+      "package": "com.zonzybse.marketplace"
     },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "owner": "zonzybse",
     "extra": {
       "eas": {
-        "projectId": "296ffa5b-0da0-482f-baa9-a0f5919f4211"
+        "projectId": "your-project-id-here"
       }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/296ffa5b-0da0-482f-baa9-a0f5919f4211"
     }
   }
 }
